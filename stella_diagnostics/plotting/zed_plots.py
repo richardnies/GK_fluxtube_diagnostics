@@ -64,7 +64,16 @@ def read_phi_vs_zed(run, time_avg=None, time_idx=-1, normalise_phi=True, kx_idx=
 
 
 def plot_phi_vs_zed(run, ax=None, label=None, ls=None, color=None, zed_times_nfield_periods=False, time_idx=-1, normalise_phi=True):
-
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- this doesn't expose kx_idx/ky_idx, so it always
+    # calls read_phi_vs_zed() with its defaults kx_idx=0, ky_idx=0, i.e.
+    # the (kx=0, ky=0) mode, which stella always sets identically to zero.
+    # With the also-default normalise_phi=True, read_phi_vs_zed() then
+    # divides by max(phi)=0, giving an all-NaN/masked array -- so calling
+    # plot_phi_vs_zed() with no arguments silently produces a blank plot
+    # on every stella run. Use run.read_phi_vs_zed(kx_idx=..., ky_idx=...)
+    # directly (or plot_quantities_over_zed(plot_phi=True, kx_idx_phi=...,
+    # ky_idx_phi=...)) with a non-trivial (kx, ky) to get a real curve.
     fig, ax = get_or_create_ax(ax=ax, nrows=1, ncols=1, figsize=(12,9))
 
     phi_vs_t, zed = run.read_phi_vs_zed(time_idx=time_idx, normalise_phi=normalise_phi)

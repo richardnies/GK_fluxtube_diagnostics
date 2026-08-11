@@ -119,11 +119,16 @@ analysis code paths end-to-end).
 Beyond the data-free suite, ~90 `StellaRun` methods were exercised
 directly against two real stella outputs (a linear-scan run and a
 smaller multi-species run) to catch anything the synthetic fixture
-couldn't. Everything that worked before the restructure still works;
-every failure traced back to a pre-existing issue in the original
-code, unrelated to the restructure (confirmed by re-reading the
-identical logic in the pre-restructure baseline commit). See "Known
-issues" below for the newly-confirmed ones.
+couldn't, and 15 representative plots were actually rendered and
+visually inspected (not just checked for exceptions) -- flux/time
+traces, flux-tube geometry, k-space/real-space/velocity-space
+contours, RH diagnostics, poloidal-ring plots. Everything that worked
+before the restructure still works; every failure (including one
+plot that ran without error but rendered blank) traced back to a
+pre-existing issue in the original code, unrelated to the restructure
+(confirmed by re-reading the identical logic in the pre-restructure
+baseline commit). See "Known issues" below for the newly-confirmed
+ones.
 
 This was still only two runs (one linear-scan, one small multi-mode/
 multi-species), not the full ~40-branch quantity dispatch or every
@@ -193,6 +198,17 @@ restructure too:
   per-timestep result into scalar array slots
   (`omega_r[i] = self.read_data_omega_k(...)`), which raises
   `ValueError` as soon as a run has more than one `(kx,ky)` mode.
+- **`plot_phi_vs_zed`** (`stella_diagnostics/plotting/zed_plots.py`):
+  doesn't expose `kx_idx`/`ky_idx`, so it always plots the `(kx=0,
+  ky=0)` mode -- which stella always sets identically to zero -- and
+  with the also-default `normalise_phi=True`, `read_phi_vs_zed`
+  divides by `max(phi)=0`, giving an all-NaN/masked array. Net effect:
+  `run.plot_phi_vs_zed()` called with no arguments silently produces a
+  blank plot on every stella run. Confirmed by actually rendering the
+  output, not just checking for exceptions. Use
+  `run.read_phi_vs_zed(kx_idx=..., ky_idx=...)` directly, or
+  `plot_quantities_over_zed(plot_phi=True, kx_idx_phi=...,
+  ky_idx_phi=...)`, with a non-trivial `(kx, ky)`.
 - **Stella-version variable-name drift**: several read paths look up
   netCDF variable names that some stella versions no longer write
   under those names, e.g. `qflx_kxky` (now `qflux_vs_kxkys` in newer
