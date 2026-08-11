@@ -1,3 +1,9 @@
 *.eps
 *.png
 .claude/
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+.DS_Store
+*.egg-info/
