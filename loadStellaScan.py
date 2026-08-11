@@ -101,7 +101,7 @@ class loadStellaScan:
 
         return fig, axs
 
-    def plot_omega_ky(self, fig=None, axs=None, label=None, ls=None, color=None, markersize=10, marker='o', gamma_min=-np.infty, delta_t_avg=None, t_val=None, kx_idx=0, check_convergence=True, rescale_vT=1, rescale_omega=1):
+    def plot_omega_ky(self, fig=None, axs=None, label=None, ls=None, color=None, markersize=10, marker='o', gamma_min=-np.inf, delta_t_avg=None, t_val=None, kx_idx=0, check_convergence=True, rescale_vT=1, rescale_omega=1):
 
         try:
             omega = self.omega_r
@@ -152,7 +152,7 @@ class loadStellaScan:
 
         return fig, axs, omega_r_plt, omega_i_plt, ky_plt
 
-    def plot_omega_kx(self, axs=None, label=None, ls=None, color=None, marker='o', gamma_min=-np.infty, delta_t_avg=None, t_val=None, ky_idx=0):
+    def plot_omega_kx(self, axs=None, label=None, ls=None, color=None, marker='o', gamma_min=-np.inf, delta_t_avg=None, t_val=None, ky_idx=0):
 
         try:
             omega = self.omega_r

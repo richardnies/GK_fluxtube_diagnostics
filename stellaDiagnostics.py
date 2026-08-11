@@ -448,7 +448,7 @@ class stellaDiagnostics:
 #            for i_kx in range(len(kx)):
 #                for i_ky in range(len(ky)):
 #                    if i_ky == 0 and (exclude_zonal or i_kx == 0):
-#                        kperp_rhoi[i_zed, i_kx, i_ky] = np.infty
+#                        kperp_rhoi[i_zed, i_kx, i_ky] = np.inf
 #                    else:
 #                        kperp_rhoi[i_zed, i_kx, i_ky] = np.sqrt( gds22[i_zed]/(shat*shat)*kx[i_kx]**2 + gds21[i_zed]/shat*kx[i_kx]*ky[i_ky] + gds2[i_zed]*ky[i_ky]**2 )
 
@@ -1790,7 +1790,7 @@ class stellaDiagnostics:
         return pflx, vflx, qflx, time
 
     #######  Get contributions to energy evolution equation
-    def get_dt_par_mom_pressure_transport(self, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1):
+    def get_dt_par_mom_pressure_transport(self, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
 
         time = self.get_time_array()
         time_max = min(time[-1], time_max)
@@ -1817,7 +1817,7 @@ class stellaDiagnostics:
 
 
     #######  Get contributions to energy evolution equation
-    def get_dt_par_mom_pressure_transport_x(self, time_idx=-1, nx=None, ny=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1):
+    def get_dt_par_mom_pressure_transport_x(self, time_idx=-1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
 
         uparZ_zed_x_y, zed, x, y, _  = self.get_quantity_zed_x_y("upar",           time_idx=time_idx, kx_order=0, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, only_zonal=True, nx=nx, ny=ny)
         par_mom_transp_zed_x_y, zed, x, y, _ = self.get_quantity_zed_x_y("par_mom_transport", time_idx=time_idx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, nx=nx, ny=ny)
@@ -1841,7 +1841,7 @@ class stellaDiagnostics:
         return x, dE_par_mom_tr_x, dE_mean_pressure_tr_x, dE_delt_pressure_tr_x
 
     #######  Get constributions to zonal flow energy evolution equation
-    def get_dt_zonal_energy_contributions(self, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1, separate_Reynolds=True):
+    def get_dt_zonal_energy_contributions(self, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, separate_Reynolds=True):
 
         time = self.get_time_array()
         time_max = min(time[-1], time_max)
@@ -2173,7 +2173,7 @@ class stellaDiagnostics:
 
 
     #######  Get constributions to zonal flow energy evolution equation as a function of x
-    def get_dt_zonal_energy_contributions_x(self, time_idx=-1, nx=None, ny=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1):
+    def get_dt_zonal_energy_contributions_x(self, time_idx=-1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
 
         reynolds_phi_nablax2_zed_x_y, zed, x, y, _ = self.get_quantity_zed_x_y("Reynolds_phi_nablax2", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
         reynolds_Pprp_nablax2_zed_x_y, zed, x, y, _ = self.get_quantity_zed_x_y("Reynolds_Pprp_nablax2", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
@@ -2396,7 +2396,7 @@ class stellaDiagnostics:
         return phi2, dens2, upar2, tpar2, tperp2, time
 
     #######  Plot total fluxes over time
-    def plot_flux_over_time(self, axs=None, label=None, species_idx=0, ls='-', color=None, marker=None, timeavg=None, timemax=np.infty, log=False):
+    def plot_flux_over_time(self, axs=None, label=None, species_idx=0, ls='-', color=None, marker=None, timeavg=None, timemax=np.inf, log=False):
         if axs is None:
             fig, axs = plt.subplots(3,1,figsize=(12,9))
             #plt.subplots_adjust(hspace=0)
@@ -2644,7 +2644,7 @@ class stellaDiagnostics:
         else:
             return fig, ax
             
-    def plot_quantity_zed_t(self, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, sideband=False, time_idx_skip=1, normalise_each_t=False, cmap='inferno', kx_order=0, ky_order=0, nx=None, ny=None, avg_norm=None, time_min=0, time_max=99999, mult_zed=None, kxmin_filter=np.infty, plot_zed_avg=True):
+    def plot_quantity_zed_t(self, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, sideband=False, time_idx_skip=1, normalise_each_t=False, cmap='inferno', kx_order=0, ky_order=0, nx=None, ny=None, avg_norm=None, time_min=0, time_max=99999, mult_zed=None, kxmin_filter=np.inf, plot_zed_avg=True):
 
 
         zed    = self.ncdata.variables['zed'][:]
@@ -2877,7 +2877,7 @@ class stellaDiagnostics:
                 if k_min is None:
                     k_min = 0
                 if k_max is None:
-                    k_max = np.infty
+                    k_max = np.inf
 
                 idx_k = np.where( (np.abs(k_other)>k_min) & (np.abs(k_other)<k_max))
                 #idx_k = np.abs(k_other) > k_min
@@ -3190,7 +3190,7 @@ class stellaDiagnostics:
         return f_kx_ky, kx, ky, time_eval
 
 
-    def get_quantity_zed_x_y(self, quantity, time_idx=-1, species_idx=0, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1, abs_squared=False, quantity_mult=None):
+    def get_quantity_zed_x_y(self, quantity, time_idx=-1, species_idx=0, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, abs_squared=False, quantity_mult=None):
 
         if remove_zonal and only_zonal:
             print("WARNING! Both only_zonal and remove_zonal were set to True, will thus return f_x_y = 0.")
@@ -3990,7 +3990,7 @@ class stellaDiagnostics:
 
         return f_x_y, x, y, time_eval
 
-    def plot_quantity_3d_torus(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, vmin=None, vmax=None, cmap=None,torus_rmax=0.6, torus_rmin=0.25, Delta_zeta=np.pi/3, nzeta=50, xlim=np.infty, lighting=True, ikymin=0, ikymax=None):
+    def plot_quantity_3d_torus(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, vmin=None, vmax=None, cmap=None,torus_rmax=0.6, torus_rmin=0.25, Delta_zeta=np.pi/3, nzeta=50, xlim=np.inf, lighting=True, ikymin=0, ikymax=None):
 
 
         f_theta_kx_ky, theta, kx, ky, time_eval = self.get_quantity_zed_kx_ky(quantity, time_idx=time_idx, species_idx=species_idx, time_val=time_val, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg)
@@ -4165,7 +4165,7 @@ class stellaDiagnostics:
         return fig, ax, vmin, vmax
 
 
-    def plot_quantity_poloidal_ring(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, vmin=None, vmax=None, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, rorigin_fac=2, zed_idx_skip=1, kyfilter_fac=None, kymin_filter=np.infty):
+    def plot_quantity_poloidal_ring(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, vmin=None, vmax=None, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, rorigin_fac=2, zed_idx_skip=1, kyfilter_fac=None, kymin_filter=np.inf):
 
         if kyfilter_fac is not None:
             ky = self.ncdata['ky'][:]
@@ -4273,7 +4273,7 @@ class stellaDiagnostics:
         return fig, ax, im, vmin, vmax
 
 
-    def plot_quantity_box_zed_x_y(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, zed_neg=True):
+    def plot_quantity_box_zed_x_y(self, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, zed_neg=True):
 
         quantity_zed_x_y, zed, x, y, time_eval = self.get_quantity_zed_x_y(quantity=quantity, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
 
@@ -4390,7 +4390,7 @@ class stellaDiagnostics:
         return fig, ax, im, vmin, vmax
 
 
-    def plot_quantity_x_y(self, quantity="phi", fig=None, ax=None, zed_val=None, zed_idx=None, mult_zed=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, show_iota_x=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.infty, kymin_filter=np.infty, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, interpolation=False, projection_3d=False, plot_contours=False, suptitle=True, xy_layout=True):
+    def plot_quantity_x_y(self, quantity="phi", fig=None, ax=None, zed_val=None, zed_idx=None, mult_zed=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, show_iota_x=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, interpolation=False, projection_3d=False, plot_contours=False, suptitle=True, xy_layout=True):
 
         quantity_x_y, x, y, time_eval = self.get_quantity_x_y(quantity=quantity, zed_val=zed_val, zed_idx=zed_idx, mult_zed=mult_zed, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
 
@@ -4714,7 +4714,7 @@ class stellaDiagnostics:
 
         return fig, axs
 
-    def get_quantity_omega_zed_kx(self, quantity, time_min, time_max, time_idx_skip=1, species_idx=0, remove_zonal=False, only_zonal=False, kx_order=0, omega_min=-np.infty, omega_max=np.infty, alt_slow_eval=True): 
+    def get_quantity_omega_zed_kx(self, quantity, time_min, time_max, time_idx_skip=1, species_idx=0, remove_zonal=False, only_zonal=False, kx_order=0, omega_min=-np.inf, omega_max=np.inf, alt_slow_eval=True): 
 
         time_all  =  self.ncdata.variables['t'][:]
         time_idx_min = np.argmin(np.abs(time_all - time_min))
@@ -4752,7 +4752,7 @@ class stellaDiagnostics:
 
         return f_omega_zed_kx, omega, zed, kx
 
-    def get_quantity_filtered_in_omega(self, f_t, time, omega_min=-np.infty, omega_max=np.infty):
+    def get_quantity_filtered_in_omega(self, f_t, time, omega_min=-np.inf, omega_max=np.inf):
 
         # Resample to equal time-intervals
         dt = np.max(np.gradient(time))
@@ -4776,7 +4776,7 @@ class stellaDiagnostics:
         return f_t_filtered, time_new
 
 
-    def plot_quantity_kx_omega(self, quantity, time_min, time_max, time_idx_skip=1, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, cmap='inferno', kx_order=0, par_der_order=0, mult_zed=None, zed_val=None, no_plot=False, omega_min=-np.infty, omega_max=np.infty, time_der=False, plot_omega2_kx2=False, mean_delt_zed=None, alt_slow_eval=False, append_mirror=False, normalise_each_kx=False, omega_norm=1, scale_eps=1):
+    def plot_quantity_kx_omega(self, quantity, time_min, time_max, time_idx_skip=1, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, cmap='inferno', kx_order=0, par_der_order=0, mult_zed=None, zed_val=None, no_plot=False, omega_min=-np.inf, omega_max=np.inf, time_der=False, plot_omega2_kx2=False, mean_delt_zed=None, alt_slow_eval=False, append_mirror=False, normalise_each_kx=False, omega_norm=1, scale_eps=1):
 
         kx, ky, zed = self.get_kx_ky_zed()
         time_all    = self.get_time_array(GX_big=True)
@@ -4793,7 +4793,7 @@ class stellaDiagnostics:
             print("Evaluating time_idx %.6i/%i..." % (i_idx+1, len(time_idxs)), end="\r")
             f_kx_ky, kx, ky, _ = self.get_quantity_kx_ky(quantity=quantity, remove_zonal=remove_zonal, only_zonal=only_zonal, time_idx=time_idx, kx_order=kx_order, mult_zed=mult_zed, par_der_order=par_der_order, mean_delt_zed=mean_delt_zed, alt_slow_eval=alt_slow_eval, zed_val=zed_val)
             if i_idx == 0:
-                f_kx_ky_t = np.zeros((len(kx), len(ky), len(time)), dtype=np.complex_)
+                f_kx_ky_t = np.zeros((len(kx), len(ky), len(time)), dtype=np.complex128)
             f_kx_ky_t[:,:,i_idx] = f_kx_ky
 
         # Add mirror of sample if required
@@ -5477,7 +5477,7 @@ class stellaDiagnostics:
         return fig, ax, time, kx_sort, f_t_kx
 
 
-    def plot_phi_t_ky(self, fig=None, ax=None, zed_idx=None, remove_zonal=False, only_zonal=False, label=None, ls=None, c=None, lw=None, log_ax=True, norm_to_t0=False, plot_abs=True, t_max=np.infty, time_avg=1, norm_kperp2=False, ratio_zonal_nonzonal=False):
+    def plot_phi_t_ky(self, fig=None, ax=None, zed_idx=None, remove_zonal=False, only_zonal=False, label=None, ls=None, c=None, lw=None, log_ax=True, norm_to_t0=False, plot_abs=True, t_max=np.inf, time_avg=1, norm_kperp2=False, ratio_zonal_nonzonal=False):
         
 
         # phi_vs_t(t, tube, zed, theta0, ky, ri)
@@ -5850,7 +5850,7 @@ class stellaDiagnostics:
 
         return fig, ax, im
 
-    def evolve_markers_2D(self, t_min=0, t_max=np.infty, x0=[0], y0=[0], only_zonal_vEx=False, only_zonal_vEy=False, remove_zonal=False, zed_val=0, nx=None, ny=None, kxmax_filter=-1):
+    def evolve_markers_2D(self, t_min=0, t_max=np.inf, x0=[0], y0=[0], only_zonal_vEx=False, only_zonal_vEy=False, remove_zonal=False, zed_val=0, nx=None, ny=None, kxmax_filter=-1):
 
         # Time interval
         time_all = self.get_time_array()
