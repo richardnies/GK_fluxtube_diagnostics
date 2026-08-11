@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stella-diagnostics"
+version = "0.1.0"
+description = "Post-processing and plotting diagnostics for STELLA (and GX/GS2) gyrokinetic simulation output."
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "netCDF4",
+    "matplotlib",
+    "scipy",
+    "seaborn",
+    "tftb",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["stella_diagnostics*"]
+
+[tool.setuptools]
+py-modules = ["stellaDiagnostics", "loadStellaScan", "setupStellaScan"]
