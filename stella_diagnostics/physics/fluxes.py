@@ -27,7 +27,10 @@ def flux_norm(run):
 
 
 def read_flux_spectra(run, species_idx=0, tube=0):#, zed_slice=None, kx_slice=None, ky_slice=None, t_slice=None):
-
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- 'qflx_kxky' is an older stella netCDF variable
+    # name; some stella versions write 'qflux_vs_kxkys' instead, which
+    # raises KeyError here. See README "Known issues".
 	# qflx_kxky(t, species, tube, zed, kx, ky)
     if run.code == "stella":
         qflx_t_zed_kx_ky = run.ncdata.variables['qflx_kxky'][:,species_idx, tube, :, :, :]
@@ -249,10 +252,13 @@ def get_fluxes_over_time(run, species_idx=0, norm=True, configuration=None, delt
 
 
 def get_energies_over_time(run, species_idx=0):
-
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs). For run.code == "stella" this only prints and
+    # never assigns delfs2/hs2/phis2/time, so the `return` below raises
+    # UnboundLocalError. Only the GS2 branch is implemented.
     if run.code == "stella":
         print("To be implemented.")
- 
+
 
     elif run.code == "GS2":
         time = run.get_time_array()
@@ -265,7 +271,10 @@ def get_energies_over_time(run, species_idx=0):
 
 
 def get_moments2_over_time(run, species_idx=0, remove_zonal=True):
-
+    # NOTE: pre-existing bug, same shape as get_energies_over_time above --
+    # for run.code == "stella" this only prints and never assigns phi2/
+    # dens2/upar2/tpar2/tperp2/time, so the `return` below raises
+    # UnboundLocalError.
     if run.code == "stella":
         print("To be implemented.")
 

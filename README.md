@@ -104,23 +104,33 @@ is the `filename_base` passed to `StellaRun`.
 pytest tests/
 ```
 
-43 tests, all data-free (no real STELLA output needed): import checks
+65 tests, all data-free (no real STELLA output needed): import checks
 for every module, an `inspect`-based diff proving the public API
 surface on `StellaRun`/`RunCollection` is unchanged from before the
 restructure, an AST-based check that every method call in
-`example_plots/*.py` resolves on the real classes, and smoke tests
-against a synthetic in-memory netCDF dataset (construction, the core
-grid readers, a couple of real analysis code paths end-to-end).
+`example_plots/*.py` resolves on the real classes (including
+instance attributes like `.ncdata` set in `__init__`, not just
+methods), and smoke tests against a synthetic in-memory netCDF
+dataset (construction, the core grid readers, a couple of real
+analysis code paths end-to-end).
 
-### Manual verification required
+### Verified against real run data
 
-The test suite above does **not** validate physics/numbers, and covers
-only a small slice of the ~40-branch quantity dispatch (fabricating a
-netCDF dataset large enough to exercise all of it wasn't worth doing
-blind). Before relying on this for real work, run all 8
-`example_plots/*.py` scripts against real STELLA run directories and
-confirm the 7 currently-working ones (see "Known issues" below)
-produce figures matching what the pre-restructure code produced.
+Beyond the data-free suite, ~90 `StellaRun` methods were exercised
+directly against two real stella outputs (a linear-scan run and a
+smaller multi-species run) to catch anything the synthetic fixture
+couldn't. Everything that worked before the restructure still works;
+every failure traced back to a pre-existing issue in the original
+code, unrelated to the restructure (confirmed by re-reading the
+identical logic in the pre-restructure baseline commit). See "Known
+issues" below for the newly-confirmed ones.
+
+This was still only two runs (one linear-scan, one small multi-mode/
+multi-species), not the full ~40-branch quantity dispatch or every
+plot function, and does not check that plotted *numbers* are
+physically correct, only that the code paths run. Before relying on
+this for real work, run the `example_plots/*.py` scripts you actually
+use against your own run directories and sanity-check the output.
 
 ## Known issues
 
@@ -146,3 +156,50 @@ since fixing them would be a behavior change:
   purpose already exists in `spectral/fft.py` but isn't used here).
   Not merged, since doing so would change a live numerical code path.
   See the `# TODO` at the top of that file.
+
+The following were newly found while verifying against real run data
+(see "Verified against real run data" above); all confirmed present,
+unchanged, in the pre-restructure baseline, so they predate the
+restructure too:
+
+- **`get_energies_over_time`** and **`get_moments2_over_time`**
+  (`stella_diagnostics/physics/fluxes.py`): for
+  `code="stella"` these just `print("To be implemented.")` and fall
+  through to `return delfs2, hs2, phis2, time` / `return phi2, ...`
+  without ever assigning those names, so both raise
+  `UnboundLocalError` on any stella run. Only the `code="GS2"` branch
+  is implemented.
+- **`plot_RH_phi_I`** (`stella_diagnostics/physics/rosenbluth_hinton.py`):
+  reads `len(idxs_kx)` before the `if idxs_kx is None: idxs_kx =
+  np.arange(...)` line that would give it a value, so calling it with
+  the documented default (`idxs_kx=None`) always raises `TypeError`.
+- **`plot_quantity_zonal`** (`stella_diagnostics/plotting/kspace_plots.py`):
+  builds axis labels as `r"$\partial_x $" + label`, which raises
+  `TypeError` whenever the default `label=None` is used (i.e. every
+  call that doesn't explicitly pass a `label`).
+- **`plot_net_radial_drift`** (`stella_diagnostics/plotting/flux_plots.py`):
+  calls `self.evaluate_net_radial_drift(zed_b=zed_b)`, but
+  `evaluate_net_radial_drift`'s only parameter is `B_bounce` — it has
+  never accepted `zed_b`. This makes `plot_net_radial_drift`
+  unconditionally broken; `evaluate_net_radial_drift` itself works
+  fine when called directly.
+- **`read_omega_t`/`read_data_omega_k`** (`stella_diagnostics/spectral/omega.py`):
+  assumes the `.omega` file has exactly 7 columns per row (`[time ky
+  kx Re(om) Im(om) Re(om_avg) Im(om_avg)]`); some stella versions
+  write a 5-column `.omega` file instead, which makes the hardcoded
+  `.reshape(-1, dim_ky, dim_kx, 7)` fail outright. Separately, even
+  with a matching 7-column file, this pair of functions only works
+  for single-`(kx,ky)`-point linear runs — `read_omega_t` assigns the
+  per-timestep result into scalar array slots
+  (`omega_r[i] = self.read_data_omega_k(...)`), which raises
+  `ValueError` as soon as a run has more than one `(kx,ky)` mode.
+- **Stella-version variable-name drift**: several read paths look up
+  netCDF variable names that some stella versions no longer write
+  under those names, e.g. `qflx_kxky` (now `qflux_vs_kxkys` in newer
+  output), `gvmus`/`gzvs` (now `g2_vs_vpamus`/`g2_vs_zvpas`), and
+  `Wenergy_g`. Affected: `plot_flux_spectra`,
+  `plot_flux_spectra_kx_ky`, `read_flux_spectra`, `get_n_T_vpa_mu`,
+  `get_gvpa_gmu`, `get_Evpa_Emu`, `read_g_vs_zed`,
+  `get_Wenergy_t_zed_kx_ky`. If your stella build is recent, expect
+  `KeyError`/`IndexError` from these specific functions even though
+  the rest of the package works fine against the same run.

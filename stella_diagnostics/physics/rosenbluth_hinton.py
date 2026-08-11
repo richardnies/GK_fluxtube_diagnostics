@@ -343,6 +343,11 @@ def plot_RH_phi_I(run, fig=None, axs=None, time_min=0, time_max=1e10, idxs_kx=No
 
     RH_phi_I_t_kx, time, kx_vals = run.get_RH_phi_I_t_kx(time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx)
 
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- idxs_kx is read here before the `if idxs_kx is
+    # None: idxs_kx = np.arange(...)` line further down assigns it a
+    # value, so calling this with the documented default (idxs_kx=None)
+    # always raises TypeError.
     if colors is None:
         if len(idxs_kx) > 1:
             colors = sns.color_palette("coolwarm", len(kx_vals))

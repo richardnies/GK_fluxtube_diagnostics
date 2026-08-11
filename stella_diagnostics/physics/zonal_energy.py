@@ -631,6 +631,10 @@ def get_Wenergy_t_zed_kx_ky(run, time_idx_min=None, time_idx_max=None, time_min=
 
     # Energy in g
     #double Wenergy_g(t, species, tube, zed, kx, ky) ;
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- 'Wenergy_g' isn't written by every stella
+    # version; on runs without it this raises an IndexError from netCDF4.
+    # See README "Known issues".
     Wenergy_g_t_zed_kx_ky  = run.ncdata['Wenergy_g'][time_idx_min:time_idx_max:time_idx_skip,0,0,:,:,:]
 
     return Wenergy_g_t_zed_kx_ky, Wenergy_phi_e_t_zed_kx_ky, Wenergy_phi_i_t_zed_kx_ky, time, zed, kx, ky

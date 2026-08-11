@@ -23,6 +23,9 @@ def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, non
 
     # omega is in format [time ky kx Re[om] Im[om] Re[omavg] Im[omavg]]
     # omega_data has dim (N_time)*(N_ky)*(N_kx)*(7)
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- this hardcoded 7-column reshape fails outright
+    # against stella versions that write a 5-column .omega file instead.
     if run.code == "stella":
         omega_data = np.loadtxt(run.omega_file, dtype='float').reshape(-1, dim_ky, dim_kx, 7)
         time_all = omega_data[:,0,0,0]
@@ -93,6 +96,12 @@ def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, non
 
 
 def read_omega_t(run, delta_t_avg=None):
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- only works for single-(kx,ky)-point linear
+    # runs. read_data_omega_k returns a (dim_ky, dim_kx)-shaped omega_r/
+    # omega_i for multi-mode runs, but the assignment below
+    # (omega_r[i] = ...) expects a scalar, so it raises ValueError as
+    # soon as a run has more than one (kx,ky) mode.
     omega_data = np.loadtxt(run.omega_file)
     Nr_timesteps = len(omega_data)
 

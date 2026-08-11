@@ -122,6 +122,9 @@ def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, 
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
     fig.suptitle(title)
 
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- string-concatenates label below, which raises
+    # TypeError whenever the default label=None is used.
     axs[0].plot(x, f_Z,       ls=ls, c=color, marker=marker, label=label)
     axs[1].plot(x, fprime_Z,  ls=ls, c=color, marker=marker, label=r"$\partial_x $" + label)
     axs[2].plot(x, fdprime_Z, ls=ls, c=color, marker=marker, label=r"$\partial^2_x $" + label)

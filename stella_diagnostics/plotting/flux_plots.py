@@ -91,6 +91,11 @@ def plot_net_radial_drift(run, fig=None, ax=None, label=None, ls=None, color=Non
 
     fig, ax = get_or_create_ax(fig, ax, nrows=1, ncols=1, figsize=(12,9))
 
+    # NOTE: pre-existing bug (predates the restructure, confirmed against
+    # real stella runs) -- evaluate_net_radial_drift's only parameter is
+    # B_bounce, it has never accepted zed_b, so this call always raises
+    # TypeError. plot_net_radial_drift is unconditionally broken;
+    # evaluate_net_radial_drift itself works fine called directly.
     # Evaluate net drift
     net_radial_drift = np.zeros(len(zed_pos))
     for i_b, zed_b in enumerate(zed_pos):
@@ -174,7 +179,11 @@ def plot_flux_over_time(run, axs=None, label=None, species_idx=0, ls='-', color=
 
 
 def plot_flux_spectra(run, fig=None, ax=None, species_idx=0, tube=0, time_idx=-1, kx_idx=0):
-
+    # NOTE: pre-existing (predates the restructure, confirmed against real
+    # stella runs) -- read_flux_spectra() below looks up the netCDF
+    # variable 'qflx_kxky', which some stella versions instead write as
+    # 'qflux_vs_kxkys'; on those runs this raises KeyError. Same for
+    # plot_flux_spectra_kx_ky below. See README "Known issues".
     qflx_t_zed_kx_ky, time, zed, kx, ky = run.read_flux_spectra(species_idx, tube)
 
     if fig is None and ax is None:

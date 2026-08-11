@@ -1,4 +1,12 @@
-"""Velocity-space (vpa, mu) distribution-function diagnostics and marker/orbit evolution."""
+"""Velocity-space (vpa, mu) distribution-function diagnostics and marker/orbit evolution.
+
+NOTE: pre-existing (predates the restructure, confirmed against real
+stella runs) -- the 'gvmus'/'gzvs' netCDF variable lookups below (in
+read_g_vs_zed, get_gvpa_gmu, get_Evpa_Emu, get_n_T_vpa_mu) expect an
+older stella output naming convention; some stella versions instead
+write these under names like 'g2_vs_vpamus'/'g2_vs_zvpas', which makes
+these functions raise KeyError. See README "Known issues".
+"""
 
 import numpy as np
 import matplotlib.pyplot as plt
