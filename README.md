@@ -98,20 +98,85 @@ where `<base_dir>` is often itself parameterized, e.g.
 `fprim-1_adb-el_zetactr-<zctr>_theta0-0`. `precise_QA`/`precise_QA_NL`
 is the `filename_base` passed to `StellaRun`.
 
+## Caching and movies
+
+`stella_diagnostics.io.cache` and `stella_diagnostics.plotting.movies`
+are standalone package features for the common "post-processing is
+slow, and I end up hand-caching intermediate data to a `.dat` file in
+one script and re-loading it in another" situation. No script is
+specially "the generator" or "the reader" of cached data -- any call
+to a cached function is a cache hit if the parameters (and the run's
+source files) haven't changed since it last ran, and a transparent
+recompute (which also refreshes the cache) if they have.
+
+```python
+from stella_diagnostics.io.cache import cached
+from stella_diagnostics.io.run import StellaRun
+
+@cached(version=1)
+def get_time_avg_quantity(run, quantity, time_avg, species_idx=0):
+    ...  # however expensive; return an ndarray, or a tuple of
+         # ndarrays/scalars
+
+run = StellaRun("run_tprim-4.2000/precise_QA")
+data = get_time_avg_quantity(run, "phi", time_avg=50)      # computes, caches
+data = get_time_avg_quantity(run, "phi", time_avg=50)      # instant, from cache
+data = get_time_avg_quantity(run, "phi", time_avg=100)     # different params -> recomputes
+```
+
+The cache key is derived from the function's bound arguments (minus
+`run`), so widening a time-averaging window or changing which quantity
+you're asking for automatically triggers a recompute -- there's no
+manual cache file to delete. The cache is also invalidated
+automatically if the run's underlying `.out.nc`/`.fluxes`/`.omega`
+files get a newer modification time than the cache (e.g. the
+simulation was restarted or extended). Cache files are written as
+sibling files next to `filename_base`
+(`<filename_base>__cache_<name>_<hash>.npz`), matching the existing
+`.out.nc`/`.omega`/`.fluxes` convention.
+
+`get_cached(run, name, compute_fn, params=..., version=..., force=...)`
+is the lower-level function `@cached` wraps, for cases where you don't
+want to decorate a whole free function. `force=True` bypasses the
+cache unconditionally; `clear_cache(run, name=None)` deletes one cache
+entry or all of a run's cache entries; the environment variable
+`STELLA_DIAGNOSTICS_NO_CACHE=1` disables caching globally (useful when
+debugging).
+
+`stella_diagnostics.plotting.movies.render_movie(img_dir,
+frame_indices, frame_fn, ...)` replaces the mkdir/skip-if-exists-frame/
+ffmpeg-subprocess boilerplate duplicated across the `movie_*.py`
+example scripts: pass it an output directory, a sequence of frame
+indices, and a callback `frame_fn(i, idx) -> Figure`, and it renders
+each frame (skipping ones that already exist unless `rerun_all=True`)
+and encodes the result with `ffmpeg`. Raises a clear
+`FFmpegNotFoundError` (frames are still written) if `ffmpeg` isn't
+installed.
+
+`stella_diagnostics.plotting.mpl_helpers.set_default_style()` replaces
+the `plt.rcParams.update({...})` block duplicated at the top of most
+`example_plots/*.py` scripts.
+
+None of `example_plots/*.py` has been migrated to use these yet -- they're
+available for new scripts, and for migrating existing ones incrementally
+whenever convenient.
+
 ## Testing
 
 ```
 pytest tests/
 ```
 
-65 tests, all data-free (no real STELLA output needed): import checks
+89 tests, all data-free (no real STELLA output needed): import checks
 for every module, an `inspect`-based diff proving the public API
 surface on `StellaRun`/`RunCollection` is unchanged from before the
 restructure, an AST-based check that every method call in
 `example_plots/*.py` resolves on the real classes (including
 instance attributes like `.ncdata` set in `__init__`, not just
-methods), and smoke tests against a synthetic in-memory netCDF
-dataset (construction, the core grid readers, a couple of real
+methods), caching-layer and movie-rendering tests (`ffmpeg` calls
+mocked, no real binary needed), and smoke tests against a synthetic
+in-memory netCDF dataset (construction, the core grid readers, a
+couple of real
 analysis code paths end-to-end).
 
 ### Verified against real run data

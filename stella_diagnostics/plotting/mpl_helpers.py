@@ -27,3 +27,19 @@ def get_or_create_ax(fig=None, ax=None, figsize=(12, 9), **subplot_kwargs):
 def coolwarm_palette(n):
     """``seaborn`` "coolwarm" palette with n colors."""
     return sns.color_palette("coolwarm", n)
+
+
+def set_default_style(usetex=True, font_family="serif", font_size=24, axes_titlepad=15, **extra_rcparams):
+    """Collapses the ``plt.rcParams.update({...})`` block duplicated
+    verbatim at the top of most example_plots/*.py scripts. Call once,
+    before creating any figures.
+    """
+    plt.rcParams.update(
+        {
+            "text.usetex": usetex,
+            "font.family": font_family,
+            "font.size": font_size,
+            "axes.titlepad": axes_titlepad,
+            **extra_rcparams,
+        }
+    )
