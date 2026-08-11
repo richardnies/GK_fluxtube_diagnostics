@@ -1,3 +1,11 @@
+"""VMEC field-line-geometry setup for stella flux-tube scans.
+
+Unrelated to the stella_diagnostics post-processing package: this is a
+pre-processing tool that computes flux-tube placement parameters
+(zeta_ctr, alpha0, nfield_periods) from a VMEC wout file, for
+generating stella input decks -- it reads no stella output and shares
+no code with stella_diagnostics.
+"""
 import numpy as np
 import netCDF4 as nc4
 import scipy.interpolate as interp
@@ -151,80 +159,3 @@ def get_zetactr0_alpha0_nfield_periods(tube_pos_val, Nturns_tube, vmec_wout, tor
     nfield_periods  = np.abs(Delta_zeta / (2*np.pi/Nfp))
 
     return zeta_ctr, alpha_val-alpha_shift, nfield_periods
-
-
-#def get_zetactr0_alpha0_nfield_periods(tube_pos_val, Nturns_tube, booz_input, torflux, N_QS, M_QS, alpha_shift=0):
-#
-#    ncdata = nc4.Dataset(booz_input,'r')
-#    Nfp = ncdata['nfp_b'].getValue()
-#    
-#    iota_all = ncdata['iota_b'][1:]
-#    ns = len(iota_all)
-#    s_all = (0.5+np.arange(ns))/ns
-#    iota_interp = interp.interp1d(s_all, iota_all)
-#    iota = iota_interp(torflux)
-#    pmns_b = ncdata['pmns_b']#[1:]
-#    ns_pack = len(pmns_b)
-#    s_pack = (0.5+np.arange(ns_pack))/ns_pack
-#    ixm_b = ncdata['ixm_b'][:]
-#    ixn_b = ncdata['ixn_b'][:]
-#    nmodes = len(ixm_b)
-#    
-#    nu_tube_beg = 0
-#    nu_tube_ctr = 0
-#    nu_tube_end = 0
-#    
-#    zetaB_ctr = 2*np.pi/Nfp * tube_pos_val
-#    alphaB = -zetaB_ctr*(iota-N_QS/M_QS) + alpha_shift
-#
-#    Delta_zetaB = np.abs( Nturns_tube * 2*np.pi/(M_QS*iota-N_QS) )
-#    zetaB_beg = zetaB_ctr - Delta_zetaB/2
-#    zetaB_end = zetaB_ctr + Delta_zetaB/2
-#    
-#    thetaB_beg = alphaB+iota*zetaB_beg
-#    thetaB_ctr = alphaB+iota*zetaB_ctr
-#    thetaB_end = alphaB+iota*zetaB_end
-#    
-#    for imode in range(nmodes):
-#        angleB_beg = ixm_b[imode] * thetaB_beg - ixn_b[imode] * zetaB_beg
-#        angleB_ctr = ixm_b[imode] * thetaB_ctr - ixn_b[imode] * zetaB_ctr
-#        angleB_end = ixm_b[imode] * thetaB_end - ixn_b[imode] * zetaB_end
-#    
-#        pmns_mode_s_all = pmns_b[:, imode]
-#        pmns_mode_interp = interp.interp1d(s_pack, pmns_mode_s_all)
-#        nu_mode = -pmns_mode_interp(torflux)
-#    
-#        nu_tube_beg = nu_tube_beg + nu_mode * np.sin(angleB_beg)
-#        nu_tube_ctr = nu_tube_ctr + nu_mode * np.sin(angleB_ctr)
-#        nu_tube_end = nu_tube_end + nu_mode * np.sin(angleB_end)
-#    
-#    zeta0_ctr   = zetaB_ctr - nu_tube_ctr
-#    Delta_zeta0 = Delta_zetaB - nu_tube_end + nu_tube_beg
-#    nfield_periods  = np.abs(Delta_zeta0 / (2*np.pi/Nfp))
-#    #alpha_VMEC = alphaB #+ nu_tube_ctr*iota
-#    alpha_VMEC = -zeta0_ctr*(iota-N_QS/M_QS) + alpha_shift
-#
-##    ### Evaluate bmnc along field line and plot
-##    import matplotlib.pyplot as plt
-##    Nr_points   = 100
-##    zetaB_eval  = np.linspace(zetaB_ctr-Delta_zetaB/2, zetaB_ctr+Delta_zetaB/2, Nr_points)
-##    thetaB_eval = alphaB + iota*zetaB_eval
-##
-##    bmnc_b = ncdata['bmnc_b'][:]
-##    B_eval = np.zeros(Nr_points)
-##    for imode in range(nmodes):
-##        bmnc_mode_s_all = bmnc_b[:, imode]
-##        bmnc_mode_interp = interp.interp1d(s_pack, bmnc_mode_s_all)
-##
-##        angleB = ixm_b[imode]*thetaB_eval - ixn_b[imode]*zetaB_eval
-##
-##        B_eval = B_eval + bmnc_mode_interp(torflux)*np.cos(angleB)
-##
-##    plt.plot(zetaB_eval, B_eval)
-##    plt.show()
-#
-#    nfield_periods_B  = np.abs(Delta_zetaB / (2*np.pi/Nfp))
-#    return zeta0_ctr, alpha_VMEC, nfield_periods
-#    #return zeta0_ctr, alpha_VMEC, nfield_periods_B
-#    #return zeta0_ctr, alpha_VMEC, nfield_periods
-#    #return zetaB_ctr, alphaB, nfield_periods
