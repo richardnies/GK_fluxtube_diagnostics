@@ -97,3 +97,103 @@ def synthetic_stella_run(tmp_path):
     np.savetxt(fluxes_path, fluxes)
 
     return StellaRun(filename_base, code="stella")
+
+
+def _write_synthetic_stella_run_with_upar(filename_base, seed=0):
+    """Like synthetic_stella_run above, but also includes an `upar`
+    variable -- needed by stella_diagnostics.scan.flux_energy_scan, not by
+    the rest of the smoke tests, so kept as a separate builder rather than
+    growing the shared fixture for one caller."""
+    n_t, n_kx, n_ky, n_zed, n_species, n_tube = 6, 5, 4, 9, 1, 1
+    rng = np.random.default_rng(seed)
+
+    ncpath = filename_base + ".out.nc"
+    ds = nc4.Dataset(ncpath, "w")
+    ds.createDimension("t", n_t)
+    ds.createDimension("kx", n_kx)
+    ds.createDimension("ky", n_ky)
+    ds.createDimension("zed", n_zed)
+    ds.createDimension("species", n_species)
+    ds.createDimension("tube", n_tube)
+    ds.createDimension("theta0", 1)
+    ds.createDimension("ri", 2)
+
+    v = ds.createVariable("t", "f8", ("t",))
+    v[:] = np.linspace(0, 50, n_t)
+
+    kx_vals = np.linspace(-2, 2, n_kx)
+    kx_vals[kx_vals == 0] = 1e-6
+    v = ds.createVariable("kx", "f8", ("kx",))
+    v[:] = kx_vals
+
+    v = ds.createVariable("ky", "f8", ("ky",))
+    v[:] = np.linspace(0, 2, n_ky)
+
+    zed_vals = np.linspace(-np.pi, np.pi, n_zed)
+    v = ds.createVariable("zed", "f8", ("zed",))
+    v[:] = zed_vals
+
+    v = ds.createVariable("theta0", "f8", ("theta0",))
+    v[:] = [0.0]
+
+    v = ds.createVariable("shat", "f8", ())
+    v[...] = 0.8
+
+    # bmag/gds22 are (zed, tube) here -- matching real stella output shape
+    # (confirmed against a real run's netCDF layout) -- since
+    # flux_energy_scan.py indexes them as bmag[:, 0]/gds22[:, 0].
+    v = ds.createVariable("bmag", "f8", ("zed", "tube"))
+    v[:] = (1.0 + 0.1 * np.cos(zed_vals))[:, None]
+
+    v = ds.createVariable("gradpar", "f8", ("zed",))
+    v[:] = np.ones(n_zed)
+
+    v = ds.createVariable("gds22", "f8", ("zed", "tube"))
+    v[:] = np.ones((n_zed, n_tube))
+
+    v = ds.createVariable("grho", "f8", ("zed", "tube"))
+    v[:] = np.ones((n_zed, n_tube))
+
+    v = ds.createVariable("phi_vs_t", "f8", ("t", "tube", "zed", "kx", "ky", "ri"))
+    v[:] = rng.random((n_t, n_tube, n_zed, n_kx, n_ky, 2))
+
+    v = ds.createVariable("upar", "f8", ("t", "species", "tube", "zed", "kx", "ky", "ri"))
+    v[:] = rng.random((n_t, n_species, n_tube, n_zed, n_kx, n_ky, 2))
+
+    ds.close()
+
+    geo_path = filename_base + ".vmec.geo"
+    with open(geo_path, "w") as f:
+        f.write("1.0 1.4 0.0 1.0\n")
+        f.write("# header\n")
+        for z in zed_vals:
+            f.write(f"0.0 {z} " + " ".join(["0.0"] * 14) + "\n")
+
+    fluxes_path = filename_base + ".fluxes"
+    fluxes = np.zeros((n_t, 1 + 3 * n_species))
+    fluxes[:, 0] = np.linspace(0, 50, n_t)
+    fluxes[:, 1] = rng.random(n_t)
+    fluxes[:, 2] = rng.random(n_t)
+    fluxes[:, 3] = rng.random(n_t) + 0.5
+    np.savetxt(fluxes_path, fluxes)
+
+    from stella_diagnostics.io.run import StellaRun
+
+    return StellaRun(filename_base, code="stella")
+
+
+@pytest.fixture
+def synthetic_scan_dirs(tmp_path):
+    """Three synthetic stella runs (see _write_synthetic_stella_run_with_upar),
+    each in its own subdirectory of one temp directory, for testing
+    multi-run scan-comparison code (stella_diagnostics.scan.flux_energy_scan,
+    stella_diagnostics.scan.config.discover_runs). Returns a list of the
+    three run directories (as str), each containing CBC.out.nc etc.
+    """
+    run_dirs = []
+    for i in range(3):
+        run_dir = tmp_path / f"run_tprim-{i}.0000"
+        run_dir.mkdir()
+        _write_synthetic_stella_run_with_upar(str(run_dir / "CBC"), seed=i)
+        run_dirs.append(str(run_dir))
+    return run_dirs

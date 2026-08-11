@@ -161,20 +161,90 @@ None of `example_plots/*.py` has been migrated to use these yet -- they're
 available for new scripts, and for migrating existing ones incrementally
 whenever convenient.
 
+## Scan comparisons: config-driven, not copy-pasted
+
+If you compare runs across many scan directories, the pattern of
+"duplicate the whole plotting script into each directory, hand-edit the
+list of directories/labels inside it, and manually re-apply any fix to
+every copy whenever the analysis code changes" doesn't scale. The fix:
+pull the scan definition (which directories, labels, colors, axis limits)
+out as a small, standalone, data-only Python config file, and keep the
+actual analysis/plotting code in exactly one place --
+`stella_diagnostics` -- called by a single reusable driver script that's
+never copied, only pointed at a different config.
+
+`example_plots/plot_flux_time.py` is a worked example of this: it used to
+contain the full Qflx(t)/E_phi(t)/E_upar(t) analysis logic *and* several
+entire hardcoded scan definitions back to back (only the last one before
+the plotting loop was ever active -- the rest were dead code kept around
+as copy-paste templates for the next comparison). Now it's a ~20-line
+driver:
+
+```
+python plot_flux_time.py scan_configs/scan_nu_var.py
+```
+
+`example_plots/scan_configs/scan_nu_var.py`, `scan_upwind.py`, and
+`scan_nu_var2.py` are the three comparisons that used to be those
+hardcoded blocks, each now a small file defining just `dirnames`
+(required) and optionally `labels`, `colors`, `filename`, `code`,
+`Q_div`, `skip_phi2`, `plot_ratio`, `ylim`, `figname_add`. Adding a new
+comparison means writing a new file like these -- not copying
+`plot_flux_time.py` -- and any improvement to the underlying analysis in
+`stella_diagnostics.scan.flux_energy_scan` (which is `@cached`, so
+re-plotting the same comparison after the first run is fast) applies to
+every config automatically, current or future.
+
+Two building blocks in `stella_diagnostics.scan.config` support this for
+any future driver+config pair, not just this one:
+
+```python
+from stella_diagnostics.scan.config import load_scan_config, discover_runs
+
+# Dynamically load a scan config .py file, with clear errors for missing
+# required fields:
+config = load_scan_config("scan_configs/scan_nu_var.py")
+
+# For *regular* single-parameter scans, skip hand-typing directory names
+# entirely: glob a base directory and extract the scan value from each
+# subdirectory's name.
+runs = discover_runs(
+    "2026-06-26_scan_qinp-1.4_.../",
+    pattern="run_tprim-*",
+    param_regex=r"tprim-([0-9.eE+-]+)",
+)
+# -> [(dirname, tprim_value), ...], sorted by tprim_value
+```
+
+A config file can call `discover_runs` internally to build `dirnames`/
+`labels` programmatically for a regular scan, or just hardcode a curated
+list for an irregular/curated comparison (like `scan_upwind.py`, which
+mixes several different numerical settings rather than one swept
+parameter) -- both produce the same kind of config module, so the driver
+doesn't need to know which one a given config used.
+
+Only `plot_flux_time.py` has been converted to this pattern so far; other
+scripts with the same problem (e.g. `plot_gvmus_all_dirs.py`, which has
+its own hand-rolled `scan_type == "shat"/"qinp"/"eps"/"coll"` if/elif
+dispatch) are natural candidates for the same treatment later.
+
 ## Testing
 
 ```
 pytest tests/
 ```
 
-89 tests, all data-free (no real STELLA output needed): import checks
+109 tests, all data-free (no real STELLA output needed): import checks
 for every module, an `inspect`-based diff proving the public API
 surface on `StellaRun`/`RunCollection` is unchanged from before the
 restructure, an AST-based check that every method call in
 `example_plots/*.py` resolves on the real classes (including
 instance attributes like `.ncdata` set in `__init__`, not just
 methods), caching-layer and movie-rendering tests (`ffmpeg` calls
-mocked, no real binary needed), and smoke tests against a synthetic
+mocked, no real binary needed), scan-config-loading/directory-discovery
+tests, a multi-run flux/energy-comparison test (using a synthetic
+3-run scan directory) verifying the underlying computation is
+actually cached, and smoke tests against a synthetic
 in-memory netCDF dataset (construction, the core grid readers, a
 couple of real
 analysis code paths end-to-end).
