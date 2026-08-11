@@ -1,5 +1,4 @@
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
 plt.rcParams.update({
     "text.usetex": True,
@@ -8,9 +7,6 @@ plt.rcParams.update({
     "axes.titlepad": 15,
 })
 
-# Stella diagnostics directory
-dir_stella_diagnostics = '/home/rnies/stella_diagnostics'
-sys.path.append(dir_stella_diagnostics)
 import stellaDiagnostics as sD
 
 akyminmax_vals = np.asarray([0.2,0.5,1,1.5,1.7])
@@ -38,6 +34,10 @@ for i_base_dir, base_dir in enumerate(base_dirs):
         StellaObj = sD.stellaDiagnostics(filename)
 
         ax = axs[i_base_dir, i_ky]
+        # NOTE: plot_contour_phi_zed_t does not exist on StellaRun/stellaDiagnostics
+        # (pre-existing bug, predates the restructure -- see README "Known issues").
+        # The closest current equivalents are plot_quantity_zed_t and
+        # RunCollection.plot_contour_phi_vs_zed_theta0.
         StellaObj.plot_contour_phi_zed_t(fig, ax, normalise_phi=True)
         title = title_basedir[i_base_dir] + r", $k_y \rho_i = $ %.2f" % (ky_val)
         ax.set_title(title)

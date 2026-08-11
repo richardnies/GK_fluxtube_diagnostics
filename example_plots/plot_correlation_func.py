@@ -1,5 +1,4 @@
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
 plt.rcParams.update({
     "text.usetex": True,
@@ -8,9 +7,6 @@ plt.rcParams.update({
     "axes.titlepad": 15,
 })
 
-# Stella diagnostics directory
-dir_stella_diagnostics = '/home/rnies/stella_diagnostics'
-sys.path.append(dir_stella_diagnostics)
 import stellaDiagnostics as sD
 
 base_dir = "theta-extent-2pi_kinetic_teprim-1"

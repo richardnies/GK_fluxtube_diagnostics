@@ -1,5 +1,4 @@
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
 plt.rcParams.update({
     "text.usetex": True,
@@ -8,9 +7,6 @@ plt.rcParams.update({
     "axes.titlepad": 15,
 })
 
-# Stella diagnostics directory
-dir_stella_diagnostics = '/home/rnies/stella_diagnostics'
-sys.path.append(dir_stella_diagnostics)
 import stellaDiagnostics as sD
 
 filename = "run_akyminmax-1.0000_nfield_periods-100.0000/precise_QA"
