@@ -160,6 +160,8 @@ def get_avg_kperp2(run, ky_idx=0, kx_idx=0):
 
 
 def get_FLR(run, ky_idx=0, kx_idx=0):
+    # FLR = finite-Larmor-radius: the Gamma0 gyroaveraging factor and its
+    # underlying k_perp^2 at a single (kx, ky) point.
     if run.code in ["stella", "GS2"]:
         kperp2 = run.ncdata.variables['kperp2'][:][:,0,kx_idx,ky_idx] 
         Gamma0 = specialfunc.iv(0, kperp2/2) * np.exp(-kperp2/2)
