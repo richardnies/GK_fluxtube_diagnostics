@@ -20,6 +20,11 @@ set_default_style()
 config = load_scan_config(sys.argv[1], required=("dirname",))
 
 run = StellaRun(config.dirname, code=getattr(config, "code", "stella"))
+# NOTE: pre-existing bug (predates this restructure, confirmed present in
+# the original repo's very first commit) -- plot_parallel_correlation_function
+# returns 5 values (fig, ax, im, avg_delta_chi, k), not 3, so this always
+# raises ValueError. Preserved as-is per this project's flag-not-fix
+# convention for pre-existing bugs; see README "Known issues".
 fig, ax, im = run.plot_parallel_correlation_function()
 
 plt.tight_layout()

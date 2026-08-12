@@ -42,8 +42,9 @@ time_idx_vals = np.arange(time_idx_min, time_idx_max, time_idx_step)
 
 def frame_fn(i, time_idx_val):
     fig, axs = plt.subplots(nrows=Nrows, ncols=2, figsize=(24, 9 * Nrows))
-    if Nrows == 1:
-        axs = [axs]
+    # plt.subplots returns a 1D array (not 2D) when Nrows==1; np.atleast_2d
+    # gives it the row dimension needed for axs[irow, 0]/axs[irow, 1] below.
+    axs = np.atleast_2d(axs)
 
     for irow in range(Nrows):
         kx_min = config.kx_mins[irow]

@@ -13,6 +13,7 @@ which used "" for cells that don't correspond to a real run).
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
@@ -38,6 +39,12 @@ label_kx = "" if kx_min is None and kx_max is None else r"$(%.2f < |k_x| < %.2f)
 Nrows = len(config.row_titles)
 Ncols = len(config.col_titles)
 fig, axs = plt.subplots(nrows=Nrows, ncols=Ncols, figsize=(8 * Ncols, 8 * Nrows), sharex=getattr(config, "sharex", True))
+# plt.subplots returns a 1D array (not 2D) when Nrows==1 or Ncols==1;
+# np.atleast_2d always prepends the new axis as the row dimension, which
+# is already correct for Nrows==1 but needs transposing back for Ncols==1.
+axs = np.atleast_2d(axs)
+if Ncols == 1 and Nrows > 1:
+    axs = axs.reshape(Nrows, 1)
 
 for i_row in range(Nrows):
     for i_col in range(Ncols):

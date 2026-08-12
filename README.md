@@ -422,3 +422,11 @@ restructure too:
   `get_Wenergy_t_zed_kx_ky`. If your stella build is recent, expect
   `KeyError`/`IndexError` from these specific functions even though
   the rest of the package works fine against the same run.
+- **`plot_parallel_correlation_function`** (`stella_diagnostics/physics/correlations.py`)
+  vs. **`example_plots/plot_correlation_func.py`**: the function returns
+  5 values (`fig, ax, im, avg_delta_chi, k`), but the script has always
+  unpacked only 3 (`fig, ax, im = ...`), so it raises `ValueError` on
+  every run. Confirmed present in the very first commit of this repo --
+  predates this restructure entirely. Preserved as-is, flagged with a
+  `# NOTE`, per this project's flag-not-fix convention; found while
+  verifying the config-driven scripts against a real multi-run scan.
