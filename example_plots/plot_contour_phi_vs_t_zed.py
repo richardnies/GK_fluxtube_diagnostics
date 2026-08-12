@@ -17,6 +17,7 @@ migration.
 import sys
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
@@ -34,6 +35,12 @@ config = load_scan_config(
 Ncols = len(config.akyminmax_vals)
 Nrows = len(config.base_dirs)
 fig, axs = plt.subplots(nrows=Nrows, ncols=Ncols, figsize=(18, 20))
+# plt.subplots returns a bare Axes (Nrows==Ncols==1) or a 1D array
+# (exactly one of Nrows/Ncols is 1), not the 2D array axs[row, col]
+# below assumes; np.atleast_2d normalizes both cases.
+axs = np.atleast_2d(axs)
+if Ncols == 1 and Nrows > 1:
+    axs = axs.reshape(Nrows, 1)
 
 for i_base_dir, base_dir in enumerate(config.base_dirs):
     for i_ky, ky_val in enumerate(config.akyminmax_vals):
