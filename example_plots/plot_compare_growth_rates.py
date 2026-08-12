@@ -1,31 +1,36 @@
-import numpy as np
+"""Growth-rate (omega vs ky) convergence comparison across an
+akyminmax x nfield_periods sweep, overlaid on shared axes.
+
+Usage:
+    python plot_compare_growth_rates.py <config.py>
+
+<config.py> defines `akyminmax_vals`, `nfield_periods_vals` (both required)
+and `filename_template` (a %-format string taking (aky_val, nfp_val), e.g.
+"run_akyminmax-%.4f_nfield_periods-%.4f/precise_QA"), plus optionally
+`codes`, `figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import loadStellaScan as lSS
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
+from stella_diagnostics.scan.run_collection import RunCollection
 
-akyminmax_vals      = [0.1]
-#nfield_periods_vals = [70,100,150,200,250,300]
-nfield_periods_vals = [20,50,70,100,150,200,250,300, 400,500,600,700,800]
-#nfield_periods_vals = [70,100]#,150,200,250,300]
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
-fig, axs = plt.subplots(nrows=2,ncols=1, figsize=(14,9))
+set_default_style()
+config = load_scan_config(sys.argv[1], required=("akyminmax_vals", "nfield_periods_vals", "filename_template"))
 
-for i_nfield_periods, nfield_periods_val in enumerate(nfield_periods_vals):
-    filenames = []
-    labels    = []
-    for i_aky, aky_val in enumerate(akyminmax_vals):
-        filenames.append("run_akyminmax-%.4f_" % (aky_val) + "nfield_periods-%.4f/precise_QA" % (nfield_periods_val))
-        labels.append(None)
-        #labels.append(r"$N_t= $ %.1f" % (nfield_periods_val))
+fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(14, 9))
 
-    scanObj = lSS.loadStellaScan(filenames, labels)
-    scanObj.plot_omega_ky(axs=axs, label=r"$Nfp = $%i" % (nfield_periods_val))
+for nfield_periods_val in config.nfield_periods_vals:
+    filenames = [config.filename_template % (aky_val, nfield_periods_val) for aky_val in config.akyminmax_vals]
+    labels = [None] * len(filenames)
+
+    scan = RunCollection(filenames, labels)
+    scan.plot_omega_ky(axs=axs, label=r"$Nfp = $%i" % (nfield_periods_val))
 
 axs[0].legend()
-plt.savefig("fig_comparison_growth_rates.png")
+plt.savefig(getattr(config, "figname", "fig_comparison_growth_rates.png"))

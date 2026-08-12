@@ -1,29 +1,30 @@
-import numpy as np
+"""Multiple quantities vs zed for one run.
+
+Usage:
+    python plot_quantities_over_zed.py <config.py>
+
+<config.py> defines `dirname` (required) and optionally `code`, `kwargs`
+(dict forwarded to plot_quantities_over_zed), `ylim`, `figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import stellaDiagnostics as sD
+from stella_diagnostics.io.run import StellaRun
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
 
-filename = "run_akyminmax-1.0000_nfield_periods-100.0000/precise_QA"
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
-dataObj = sD.stellaDiagnostics(filename)
+set_default_style()
+config = load_scan_config(sys.argv[1], required=("dirname",))
 
-kwargs = {  'plot_phi'       : True,
-            'plot_B'         : True,
-            'plot_Gamma0'    : True,
-            'plot_omega_s_k' : True,
-            'norm_factor_omega_s_k' : 1}
-
-fig, ax = dataObj.plot_quantities_over_zed(**kwargs)
+run = StellaRun(config.dirname, code=getattr(config, "code", "stella"))
+fig, ax = run.plot_quantities_over_zed(**getattr(config, "kwargs", {}))
 
 ax.legend()
-#ax.set_xlim([-0.8*np.pi/2 * 139/234 * 20/10, -0.5*np.pi/2 * 139/234 * 20/10])
-ax.set_ylim([-1,2.5])
+ax.set_ylim(getattr(config, "ylim", None))
 ax.grid()
 
-plt.savefig("fig_quantities_over_zed.png")
+plt.savefig(getattr(config, "figname", "fig_quantities_over_zed.png"))

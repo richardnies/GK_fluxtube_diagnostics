@@ -1,30 +1,30 @@
-import numpy as np
+"""Flux-tube geometry comparison across a set of runs.
+
+Usage:
+    python plot_geometry_compare_flux_tubes.py <config.py>
+
+<config.py> defines `dirnames` (required) and optionally `labels`, `codes`,
+`kwargs` (forwarded to plot_comparison_flux_tube_geometry), `figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import loadStellaScan as lSS
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
+from stella_diagnostics.scan.run_collection import RunCollection
 
-filename_list = ["run_akyminmax-0.3000_nfield_periods-200.0000/precise_QA"]
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
-label_list = [None]
+set_default_style()
+config = load_scan_config(sys.argv[1])
 
-data_obj = lSS.loadStellaScan(filename_list, label_list)
+scan = RunCollection(
+    config.dirnames,
+    labels=getattr(config, "labels", None),
+    codes=getattr(config, "codes", None),
+)
+axs = scan.plot_comparison_flux_tube_geometry(**getattr(config, "kwargs", {"zed_times_nfield_periods": True}))
 
-axs = data_obj.plot_comparison_flux_tube_geometry(zed_times_nfield_periods=True)
-
-## Limit zeta to a few periods
-#divide_zeta = 1
-#for i in range(3):
-#    for j in range(4):
-#        axs[i][j].set_xlim([-np.pi/divide_zeta, np.pi/divide_zeta])
-
-#for ax in axs:
-#    print(ax)
-#    ax.set_xlim([-np.pi/divide_zeta, np.pi/divide_zeta])
-
-plt.savefig("fig_comparison_flux_tube_geometry.png")
+plt.savefig(getattr(config, "figname", "fig_comparison_flux_tube_geometry.png"))

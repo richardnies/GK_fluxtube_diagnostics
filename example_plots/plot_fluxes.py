@@ -1,18 +1,27 @@
-import numpy as np
+"""Flux(t) for one run.
+
+Usage:
+    python plot_fluxes.py <config.py>
+
+<config.py> defines `dirname` (required, the run's filename_base) and
+optionally `code`, `figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import stellaDiagnostics as sD
+from stella_diagnostics.io.run import StellaRun
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
 
-filename_base  = "run_akyminmax-1.0000_nfield_periods-30.0000/precise_QA"
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
-diagObj = sD.stellaDiagnostics(filename_base)
-axs = diagObj.plot_flux_over_time()
-axs[2].set_yscale('log')
+set_default_style()
+config = load_scan_config(sys.argv[1], required=("dirname",))
+
+run = StellaRun(config.dirname, code=getattr(config, "code", "stella"))
+axs = run.plot_flux_over_time()
+axs[2].set_yscale("log")
 plt.tight_layout()
-plt.savefig("fig_fluxes.png")
+plt.savefig(getattr(config, "figname", "fig_fluxes.png"))

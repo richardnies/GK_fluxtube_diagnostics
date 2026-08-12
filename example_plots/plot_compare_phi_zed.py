@@ -1,35 +1,40 @@
-import numpy as np
+"""phi(zed) comparison across an akyminmax x nfield_periods sweep.
+
+Usage:
+    python plot_compare_phi_zed.py <config.py>
+
+<config.py> defines `akyminmax_vals`, `nfield_periods_vals`,
+`filename_template` (%-format taking (aky_val, nfp_val)), and
+`label_template` (%-format taking nfp_val), all required, plus optionally
+`figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import loadStellaScan as lSS
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
+from stella_diagnostics.scan.run_collection import RunCollection
 
-akyminmax_vals      = [0.1]
-#akyminmax_vals      = [0.3]
-#akyminmax_vals      = [1.0]
-#nfield_periods_vals = [20,50,70,100,150,200,250,300]
-nfield_periods_vals = [200,250,300, 400]
-#nfield_periods_vals = [20,50,70,100,150,200,250,300, 400,500,600,700,800]
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
+
+set_default_style()
+config = load_scan_config(
+    sys.argv[1],
+    required=("akyminmax_vals", "nfield_periods_vals", "filename_template", "label_template"),
+)
 
 filenames = []
-labels    = []
-for i_aky, aky_val in enumerate(akyminmax_vals):
-    for i_nfp, nfp_val in enumerate(nfield_periods_vals):
-        filenames.append("run_akyminmax-%.4f_" % (aky_val) + "nfield_periods-%.4f/precise_QA" % (nfp_val))
-        labels.append(r"nfp = %.1f" % (nfp_val))
-        #labels.append(r"$k_y \rho_i =$ %.1f, nfp = %.1f" % (aky_val, nfp_val))
+labels = []
+for aky_val in config.akyminmax_vals:
+    for nfp_val in config.nfield_periods_vals:
+        filenames.append(config.filename_template % (aky_val, nfp_val))
+        labels.append(config.label_template % nfp_val)
 
-Scan = lSS.loadStellaScan(filenames, labels)
-Scan.plot_phi_vs_zed(zed_times_nfield_periods=True)
-#plt.xlim([-200,200])
-#plt.xlim([-600,600])
+scan = RunCollection(filenames, labels)
+scan.plot_phi_vs_zed(zed_times_nfield_periods=True)
 plt.xlabel(r"$\zeta$")
 plt.grid()
 plt.legend()
-plt.savefig("fig_compare_phi_zed.png")
-
+plt.savefig(getattr(config, "figname", "fig_compare_phi_zed.png"))

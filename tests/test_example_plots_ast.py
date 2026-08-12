@@ -55,11 +55,23 @@ def _unresolved_attrs(path):
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
             call = node.value
             if isinstance(call.func, ast.Attribute):
+                # legacy compat-shim style: sD.stellaDiagnostics(...) / lSS.loadStellaScan(...)
                 if call.func.attr == "stellaDiagnostics":
                     for t in node.targets:
                         if isinstance(t, ast.Name):
                             class_of_var[t.id] = StellaRun
                 elif call.func.attr == "loadStellaScan":
+                    for t in node.targets:
+                        if isinstance(t, ast.Name):
+                            class_of_var[t.id] = RunCollection
+            elif isinstance(call.func, ast.Name):
+                # direct construction, as used by the config-driven drivers:
+                # StellaRun(...) / RunCollection(...)
+                if call.func.id == "StellaRun":
+                    for t in node.targets:
+                        if isinstance(t, ast.Name):
+                            class_of_var[t.id] = StellaRun
+                elif call.func.id == "RunCollection":
                     for t in node.targets:
                         if isinstance(t, ast.Name):
                             class_of_var[t.id] = RunCollection

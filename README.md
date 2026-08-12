@@ -223,10 +223,78 @@ mixes several different numerical settings rather than one swept
 parameter) -- both produce the same kind of config module, so the driver
 doesn't need to know which one a given config used.
 
-Only `plot_flux_time.py` has been converted to this pattern so far; other
-scripts with the same problem (e.g. `plot_gvmus_all_dirs.py`, which has
-its own hand-rolled `scan_type == "shat"/"qinp"/"eps"/"coll"` if/elif
-dispatch) are natural candidates for the same treatment later.
+### Running the converted scripts
+
+19 of the 30 scripts in `example_plots/` have been converted to this
+pattern (see "Known issues" below for the 11 not yet converted). Every
+converted script is run the same way, from inside `example_plots/`:
+
+```
+python <script>.py scan_configs/<config>.py
+```
+
+`scan_configs/*.py` are example configs, one (or a few) per driver,
+showing real values that used to be hardcoded in the script itself --
+copy one and edit it to point at your own runs rather than editing the
+driver. Any *.py file with the right fields works; the ones checked in
+are just worked examples, not a fixed list.
+
+| Script | Example config(s) | What it plots |
+|---|---|---|
+| `plot_fluxes.py` | `fluxes_default.py` | Flux(t), one run |
+| `plot_correlation_func.py` | `correlation_func_default.py` | Parallel correlation function, one run |
+| `plot_quantities_over_zed.py` | `quantities_over_zed_default.py` | Multiple quantities vs zed, one run |
+| `plot_geometry_compare_flux_tubes.py` | `geometry_compare_default.py` | Flux-tube geometry comparison |
+| `plot_compare_growth_rates.py` | `growth_rates_default.py` | omega(ky) convergence vs akyminmax x nfield_periods |
+| `plot_compare_phi_zed.py` | `compare_phi_zed_default.py` | phi(zed) vs akyminmax x nfield_periods |
+| `plot_contour_phi_vs_t_zed.py` | `contour_phi_vs_t_zed_default.py` | \|phi\|(zeta, t) grid (**broken**, see "Known issues") |
+| `plot_gvmus_all_dirs.py` | `gvmus_grid_{shat,qinp,eps,coll}.py` | g(vpa, mu) contour grid across a 2D run sweep |
+| `plot_phi_spectrum_compare.py` | `phi_spectrum_{nu0_only,nu_scan,qinp_scan}.py` | phi(k) spectra (ky, kx nonzonal, kx zonal) across a tprim sweep |
+| `plot_contour_quantity_vs_kx_omega.py` | `contour_kx_omega_coll_comparison.py` | quantity(kx, omega) contour comparison |
+| `plot_compare_kx_rhoi.py` | `compare_kx_rhoi_default.py` | kx*rhoi(t) + scaling-vs-tprim comparison |
+| `plot_phiZ_TS_qkappa2.py` | `phiZ_TS_qkappa2_default.py` | E_zonal vs q*kappa^2 scaling |
+| `plot_RH_P_C_kx_from_file.py` | `rh_p_c_kx_default.py` | Collisional P_RH(kx)/(nu*E_RH) vs vnew x tprim |
+| `plot_contour_quantity_vs_t_x.py` | `contour_quantity_x_t_P_RH_tot.py` | quantity(x, t) contour grid + Qflx/phi2 overlay |
+| `plot_flux_time.py` | `scan_nu_var.py`, `scan_upwind.py`, `scan_nu_var2.py` | Qflx(t)/E_phi(t)/E_upar(t) comparison |
+| `movie_gvmus_t.py` | `movie_gvmus_t_default.py` | Movie: g(vpa, mu) vs time, one run |
+| `movie_gvmus_Z-NZ.py` | `movie_gvmus_ZNZ_default.py` | Movie: g_NZ/g_Z(vpa, mu) side by side vs time |
+| `movie_gzvs_Z-NZ.py` | `movie_gzvs_ZNZ_default.py` | Movie: g_NZ/g_Z(zed, vpa) side by side vs time |
+| `movie_gvmus_Z-NZ_kxs.py` | `movie_gvmus_ZNZ_kxs_default.py` | Movie: g_NZ/g_Z(vpa, mu), one row per kx band, vs time |
+
+Each converted script has a module docstring listing its config's exact
+fields (required and optional) -- read the top of the script, or an
+existing config in `scan_configs/`, before writing a new one.
+
+### Not yet converted
+
+11 scripts remain in their original hardcoded-path, standalone form --
+each contains substantial original analysis logic (not just a call into
+one existing package function), so converting them means extracting real
+physics code into `stella_diagnostics`, not just moving data into a
+config file. Left for a later pass rather than done blind, since none of
+it could be verified against real multi-run data here:
+
+- `plot_flux_coll.py`, `plot_ERH_Ephi.py` -- E_phi/Gamma0 calculations
+  that overlap with `stella_diagnostics.scan.flux_energy_scan` and need
+  reconciling, not just moving.
+- `plot_RH_phi_E_P_t_all_kx.py` -- per-kx caching/aggregation/summary
+  figures; has a real bug where using its `.dat` cache silently skips
+  generating a whole summary figure.
+- `plot_mean_quantities_x.py` + `movie_quantities_x.py`, and
+  `plot_mean_quantities_x_zed.py` + `movie_quantities_x_zed.py` -- two
+  more ad hoc `.dat`-cache read/write script pairs (like the
+  `flux_energy_scan.py` example was). One has a **divide-by-zero bug**
+  (dividing an accumulator by a sum that's 0 when no new frames render).
+- `plot_param_scan_Dimits.py` + `get_Dimits.py` -- a `.json`-cache pair;
+  `get_Dimits.py` alone has ~500 lines of dense, original growth-rate/RH
+  analysis with no package equivalent yet.
+- `plot_zonal_distribution.py` -- a fully self-contained analysis
+  subsystem (stella input-namelist parsing, stella's internal
+  `kxkyz_lo` domain-decomposition layout, restart-file reading) that
+  doesn't use `StellaRun` at all.
+- `movie_quantity_real_space.py` -- needs a small new package helper for
+  its pre-loop zonal-profile normalization before `render_movie` can be
+  wired in cleanly.
 
 ## Testing
 

@@ -1,23 +1,26 @@
-import numpy as np
+"""Parallel correlation function for one run.
+
+Usage:
+    python plot_correlation_func.py <config.py>
+
+<config.py> defines `dirname` (required) and optionally `code`, `figname`.
+"""
+import sys
+
 import matplotlib.pyplot as plt
-plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.size": 24, 
-    "axes.titlepad": 15,
-})
 
-import stellaDiagnostics as sD
+from stella_diagnostics.io.run import StellaRun
+from stella_diagnostics.plotting.mpl_helpers import set_default_style
+from stella_diagnostics.scan.config import load_scan_config
 
-base_dir = "theta-extent-2pi_kinetic_teprim-1"
-filename  = base_dir+"/precise_QA_NL"
-StellaObj = sD.stellaDiagnostics(filename)
+if len(sys.argv) != 2:
+    sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
-fig, ax, im = StellaObj.plot_parallel_correlation_function()
+set_default_style()
+config = load_scan_config(sys.argv[1], required=("dirname",))
+
+run = StellaRun(config.dirname, code=getattr(config, "code", "stella"))
+fig, ax, im = run.plot_parallel_correlation_function()
 
 plt.tight_layout()
-#fig.subplots_adjust(right=0.8)
-#cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-#fig.colorbar(im, cax=cbar_ax)
-#plt.subplots_adjust(hspace=0)
-plt.savefig("fig_correlation_func.png", dpi=800)
+plt.savefig(getattr(config, "figname", "fig_correlation_func.png"), dpi=800)
