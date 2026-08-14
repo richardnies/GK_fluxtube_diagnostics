@@ -16,6 +16,31 @@ from stella_diagnostics.spectral.fft import get_fft_k
 from stella_diagnostics.grid import nearest_index
 
 
+def _periodic_zed_derivative(f_zed, gradpar, bmag, zed):
+    """d/dzed(f_zed/bmag)*gradpar*bmag via a periodic (wraparound) finite
+    difference along zed (f_zed's leading axis) -- the same computation
+    duplicated verbatim 3x before this extraction. f_zed may have any
+    number of trailing axes (kx; or kx,y); gradpar/bmag are 1D along zed
+    and broadcast against them automatically.
+
+    NOTE: the two periodic-wraparound boundary points (zed index 0 and
+    -1) divide by dzed, not 2*dzed like the interior centered difference
+    -- so those two points are effectively twice the interior derivative
+    for the same physical spacing. This asymmetry predates this
+    extraction (replicated verbatim from all 3 original call sites);
+    left as-is since fixing it would change existing numerical output --
+    flagged rather than corrected per this project's convention.
+    """
+    shape = (slice(None),) + (None,) * (f_zed.ndim - 1)
+    fB_zed = f_zed / bmag[shape]
+    dzed = zed[1] - zed[0]
+    df_zed = np.zeros_like(fB_zed)
+    df_zed[0]    = (fB_zed[1] - fB_zed[-1]) / dzed
+    df_zed[1:-1] = 0.5*(fB_zed[2:] - fB_zed[:-2]) / dzed
+    df_zed[-1]   = (fB_zed[0] - fB_zed[-2]) / dzed
+    return df_zed * (gradpar*bmag)[shape]
+
+
 def get_zonal_shearing_kx(run, time_min=0, time_max=1e5):
 
     time_idx_min = run.get_time_idx(time_min)
@@ -60,7 +85,7 @@ def get_zonal_shearing_kx(run, time_min=0, time_max=1e5):
     return gammaE2_tot_kx[kx>0], gammaE2_stationary_kx[kx>0], gammaE2_timevar_kx[kx>0], kx[kx>0]
 
 
-def get_dt_par_mom_pressure_transport(run, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
+def get_dt_par_mom_pressure_transport(run, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1):
 
     time = run.get_time_array()
     time_max = min(time[-1], time_max)
@@ -77,7 +102,7 @@ def get_dt_par_mom_pressure_transport(run, time_min=0, time_max=1e10, time_idx_s
     for i_time_idx, time_idx in enumerate(time_idx_eval):
         print("Evaluating par mom transport: time idx %5i/%5i" % (i_time_idx+1, len(time_idx_eval)), end="\r")
 
-        x, dE_par_mom_tr_x, dE_meanP_tr_x, dE_deltP_tr_x = run.get_dt_par_mom_pressure_transport_x(time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
+        x, dE_par_mom_tr_x, dE_meanP_tr_x, dE_deltP_tr_x = run.get_dt_par_mom_pressure_transport_x(time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
         dx = x[1]-x[0]
         dE_par_mom_tr[i_time_idx] = np.sum(dE_par_mom_tr_x)*dx
         dE_meanP_tr[i_time_idx]   = np.sum(dE_meanP_tr_x)*dx
@@ -86,15 +111,15 @@ def get_dt_par_mom_pressure_transport(run, time_min=0, time_max=1e10, time_idx_s
     return time[time_idx_eval], dE_par_mom_tr, dE_meanP_tr, dE_deltP_tr
 
 
-def get_dt_par_mom_pressure_transport_x(run, time_idx=-1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
+def get_dt_par_mom_pressure_transport_x(run, time_idx=-1, nx=None, ny=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1):
 
-    uparZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("upar",           time_idx=time_idx, kx_order=0, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, only_zonal=True, nx=nx, ny=ny)
-    par_mom_transp_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("par_mom_transport", time_idx=time_idx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, nx=nx, ny=ny)
+    uparZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("upar",           time_idx=time_idx, kx_order=0, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, only_zonal=True, nx=nx, ny=ny)
+    par_mom_transp_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("par_mom_transport", time_idx=time_idx, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, nx=nx, ny=ny)
 
-    presZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("pressure",       time_idx=time_idx, kx_order=0, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, only_zonal=True, nx=nx, ny=ny)
-    densZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("density",        time_idx=time_idx, kx_order=0, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, only_zonal=True, nx=nx, ny=ny)
+    presZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("pressure",       time_idx=time_idx, kx_order=0, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, only_zonal=True, nx=nx, ny=ny)
+    densZ_zed_x_y, zed, x, y, _  = run.get_quantity_zed_x_y("density",        time_idx=time_idx, kx_order=0, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, only_zonal=True, nx=nx, ny=ny)
     tempZ_zed_x_y = presZ_zed_x_y-densZ_zed_x_y
-    pressure_transp_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("pressure_transport", time_idx=time_idx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, nx=nx, ny=ny)
+    pressure_transp_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("pressure_transport", time_idx=time_idx, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, nx=nx, ny=ny)
 
     dl_over_B_avg = run.dl_over_B_avg()
     mean_tempZ_x_y = np.sum(dl_over_B_avg[:,None,None]*tempZ_zed_x_y)
@@ -110,7 +135,7 @@ def get_dt_par_mom_pressure_transport_x(run, time_idx=-1, nx=None, ny=None, kxmi
     return x, dE_par_mom_tr_x, dE_mean_pressure_tr_x, dE_delt_pressure_tr_x
 
 
-def get_dt_zonal_energy_contributions(run, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, separate_Reynolds=True):
+def get_dt_zonal_energy_contributions(run, time_min=0, time_max=1e10, time_idx_skip=1, nx=None, ny=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1, separate_Reynolds=True):
 
     time = run.get_time_array()
     time_max = min(time[-1], time_max)
@@ -133,7 +158,7 @@ def get_dt_zonal_energy_contributions(run, time_min=0, time_max=1e10, time_idx_s
         print("Evaluating zonal energy contributions: time idx %5i/%5i" % (i_time_idx+1, len(time_idx_eval)), end="\r")
 
         # Get energies
-        x, EZ_x, EZ_deltaphi2_x, dEZ_reynolds_phi_nablax2_x, dEZ_reynolds_Pprp_nablax2_x, dEZ_reynolds_phi_nablaxy_x, dEZ_reynolds_Pprp_nablaxy_x, dEZ_vDx_x, dEZ_upar_x = run.get_dt_zonal_energy_contributions_x(time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
+        x, EZ_x, EZ_deltaphi2_x, dEZ_reynolds_phi_nablax2_x, dEZ_reynolds_Pprp_nablax2_x, dEZ_reynolds_phi_nablaxy_x, dEZ_reynolds_Pprp_nablaxy_x, dEZ_vDx_x, dEZ_upar_x = run.get_dt_zonal_energy_contributions_x(time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
         dx = x[1]-x[0]
 
         EZ_t[i_time_idx]                        = np.sum(EZ_x               )*dx
@@ -297,17 +322,8 @@ def get_time_avg_zonal_energy_contributions_kx(run, time_min=0, time_max=1e10, t
             kx = kx[kx>=0]
 
             # Obtain parallel derivative of upar term
-            dupar_zed_kx = np.zeros_like(upar_zed_kx)
-            uparB_zed_kx = upar_zed_kx / bmag[:,None]
             gradpar  = run.ncdata.variables['gradpar'][:]
-            dzed = zed[1]-zed[0]
-            for i_zed in range(len(zed)-1):
-                if i_zed == 0:
-                    dupar_zed_kx[0] = (uparB_zed_kx[1]-uparB_zed_kx[-1]) / dzed
-                else:
-                    dupar_zed_kx[i_zed] = 0.5*(uparB_zed_kx[i_zed+1]-uparB_zed_kx[i_zed-1]) / dzed
-            dupar_zed_kx[-1] = (uparB_zed_kx[0]-uparB_zed_kx[-2]) / dzed
-            dupar_zed_kx = dupar_zed_kx * (gradpar*bmag)[:,None]
+            dupar_zed_kx = _periodic_zed_derivative(upar_zed_kx, gradpar, bmag, zed)
 
         else:
             # Evaluate everything in real space and then transform back to k-space
@@ -324,17 +340,8 @@ def get_time_avg_zonal_energy_contributions_kx(run, time_min=0, time_max=1e10, t
             par_mom_tr_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="par_mom_transport", time_idx=time_idx)
     
             # Obtain parallel derivative of upar term
-            dupar_zed_x_y = np.zeros_like(upar_zed_x_y)
-            uparB_zed_x_y = upar_zed_x_y / bmag[:,None,None]
             gradpar  = run.ncdata.variables['gradpar'][:]
-            dzed = zed[1]-zed[0]
-            for i_zed in range(len(zed)-1):
-                if i_zed == 0:
-                    dupar_zed_x_y[0] = (uparB_zed_x_y[1]-uparB_zed_x_y[-1]) / dzed
-                else:
-                    dupar_zed_x_y[i_zed] = 0.5*(uparB_zed_x_y[i_zed+1]-uparB_zed_x_y[i_zed-1]) / dzed
-            dupar_zed_x_y[-1] = (uparB_zed_x_y[0]-uparB_zed_x_y[-2]) / dzed
-            dupar_zed_x_y = dupar_zed_x_y * (gradpar*bmag)[:,None,None]
+            dupar_zed_x_y = _periodic_zed_derivative(upar_zed_x_y, gradpar, bmag, zed)
     
             # Take y-averages
             dy = y[1]-y[0]
@@ -438,17 +445,17 @@ def get_time_avg_zonal_energy_contributions_kx(run, time_min=0, time_max=1e10, t
     return kx, EZ_kx, dEZ_reynolds_phi_nablax2_kx, dEZ_reynolds_Pprp_nablax2_kx, dEZ_reynolds_phi_nablaxy_kx, dEZ_reynolds_Pprp_nablaxy_kx, dEZ_vDx_P_kx, dEZ_upar_kx, dE_mean_pressure_tr_kx, dE_delt_pressure_tr_kx, dE_par_mom_tr_kx, du_par_mom_tr_kx, du_cos_par_mom_tr_kx
 
 
-def get_dt_zonal_energy_contributions_x(run, time_idx=-1, nx=None, ny=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1):
+def get_dt_zonal_energy_contributions_x(run, time_idx=-1, nx=None, ny=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1):
 
-    reynolds_phi_nablax2_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_phi_nablax2", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
-    reynolds_Pprp_nablax2_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_Pprp_nablax2", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
-    reynolds_phi_nablaxy_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_phi_nablaxy", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
-    reynolds_Pprp_nablaxy_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_Pprp_nablaxy", time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
-    dxP_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="pressure", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
-    phi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
-    dxphi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
-    dx2phi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=2, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kymax_filter=kymax_filter)
-    upar_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="upar", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=0, nx=nx, ny=ny, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kymax_filter=kymax_filter)
+    reynolds_phi_nablax2_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_phi_nablax2", time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
+    reynolds_Pprp_nablax2_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_Pprp_nablax2", time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
+    reynolds_phi_nablaxy_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_phi_nablaxy", time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
+    reynolds_Pprp_nablaxy_zed_x_y, zed, x, y, _ = run.get_quantity_zed_x_y("Reynolds_Pprp_nablaxy", time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff, kx_order=0) # without x-derivative in front, so need to multiply by dx2phiZ to get energy derivative
+    dxP_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="pressure", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
+    phi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
+    dxphi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
+    dx2phi_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="phi", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=2, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
+    upar_zed_x_y, _, _, _, _ = run.get_quantity_zed_x_y(quantity="upar", only_zonal=True, remove_zonal=False, time_idx=time_idx, kx_order=0, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
 
     # Obtain deltaphi
     dl_over_B_avg = run.dl_over_B_avg()
@@ -460,26 +467,8 @@ def get_dt_zonal_energy_contributions_x(run, time_idx=-1, nx=None, ny=None, kxmi
 
     # Obtain parallel derivative of upar term
     _, _, _, _, gds22, bmag = run.get_FLR()
-    #dupar_dzed_x_y = np.gradient(upar_zed_x_y/bmag[:,None,None], zed, axis=0) * bmag[:,None,None]
-     #   f_zed_x_y = np.gradient(f_zed_x_y*gradpar[:,None,None], zed, axis=0)
-    # Use periodicity
-    dupar_zed_x_y = np.zeros_like(upar_zed_x_y)
-    uparB_zed_x_y = upar_zed_x_y / bmag[:,None,None]
     gradpar  = run.ncdata.variables['gradpar'][:]
-    dzed = zed[1]-zed[0]
-    for i_zed in range(len(zed)-1):
-        if i_zed == 0:
-            dupar_zed_x_y[0] = (uparB_zed_x_y[1]-uparB_zed_x_y[-1]) / dzed
-        else:
-            dupar_zed_x_y[i_zed] = 0.5*(uparB_zed_x_y[i_zed+1]-uparB_zed_x_y[i_zed-1]) / dzed
-    dupar_zed_x_y[-1] = (uparB_zed_x_y[0]-uparB_zed_x_y[-2]) / dzed
-
-    dupar_zed_x_y = dupar_zed_x_y * (gradpar*bmag)[:,None,None]
-#        print(dupar_zed_x_y[:,0,0])
-    #print(np.shape(gradpar))
-    #print(np.shape(bmag))
-    #print(np.sum(dupar_zed_x_y[:,0,0]*dl_over_B_avg))
-    #assert(np.abs(np.sum(dupar_zed_x_y[:,0,0]*dl_over_B_avg)) < 1e-14)
+    dupar_zed_x_y = _periodic_zed_derivative(upar_zed_x_y, gradpar, bmag, zed)
 
     # Get energies
     dy = y[1]-y[0]

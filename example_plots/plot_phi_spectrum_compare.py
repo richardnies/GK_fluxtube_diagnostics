@@ -9,8 +9,17 @@ Usage:
 directories), `dirname_mode` (one of "nu_scan", "qinp_scan",
 "convergence_scan", "nu0_only"), all required, plus optionally
 `scaling_theory_vals`, `W_instead_of_phi`, `lw`, `overplot_kx_ky`,
-`plot_legend`, `plot_alpha_spectrum`, `delta_t_avg`, `load_from_file`,
-`plot_slides`, `add_arrows`, `colors`, `filename`, `code`.
+`plot_legend`, `plot_alpha_spectrum`, `time_avg`, `load_from_file`,
+`plot_slides`, `add_arrows`, `colors`, `filename`, `code`, `ylim_ky`,
+`ylim_kx_nonzonal`, `ylim_kx_zonal`, `ylim_alpha_spectrum` (y-axis
+limits for the three spectrum panels and the alpha-spectrum variant of
+each -- all default None, letting matplotlib autoscale; these spectra
+span many orders of magnitude and vary a lot run to run, so a fixed
+window tuned for one scan can silently show a blank plot for another).
+
+`time_avg`: trailing-window width ending at the run's last sample --
+same convention as every other quantity-time-averaging function in this
+codebase (renamed from `delta_t_avg`).
 """
 import sys
 from os.path import exists
@@ -33,7 +42,7 @@ lw = getattr(config, "lw", 0.5)
 overplot_kx_ky = getattr(config, "overplot_kx_ky", True)
 plot_legend = getattr(config, "plot_legend", False)
 plot_alpha_spectrum = getattr(config, "plot_alpha_spectrum", False)
-delta_t_avg = getattr(config, "delta_t_avg", 500)
+time_avg = getattr(config, "time_avg", 500)
 load_from_file = getattr(config, "load_from_file", True)
 plot_slides = getattr(config, "plot_slides", False)
 add_arrows = getattr(config, "add_arrows", False)
@@ -41,6 +50,10 @@ scaling_theory_vals = getattr(config, "scaling_theory_vals", ["unscaled"])
 colors = getattr(config, "colors", ["k", "orange", "crimson", "crimson", "forestgreen", "mediumblue", "purple", "c", "pink"])
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+ylim_ky = getattr(config, "ylim_ky", None)
+ylim_kx_nonzonal = getattr(config, "ylim_kx_nonzonal", None)
+ylim_kx_zonal = getattr(config, "ylim_kx_zonal", None)
+ylim_alpha_spectrum = getattr(config, "ylim_alpha_spectrum", None)
 
 figsize = (7, 4.5) if plot_slides else (4.5, 4.5)
 
@@ -87,49 +100,39 @@ for tprim in config.tprim_vals:
 
         # Phi2(ky)
         fig, ax = plt.subplots(figsize=figsize)
-        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=False, color_list=colors_list, tprim_norm_list=tprim_list, qinp_norm_list=qinp_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, delta_t_avg=delta_t_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=lw, W_instead_of_phi=W_instead_of_phi)
+        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=False, color_list=colors_list, tprim_norm_list=tprim_list, qinp_norm_list=qinp_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, time_avg=time_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=lw, W_instead_of_phi=W_instead_of_phi)
         ax.grid(True)
-        ax.legend(fontsize=fontsize_legend, ncols=1, loc="lower left", columnspacing=0.7, markerscale=1, handlelength=1.5)
+        # nu0_only (and any other mode with no per-line label, e.g. a
+        # single unlabeled run) would otherwise still draw an empty
+        # legend box -- only draw one if some line actually has a label.
+        if ax.get_legend_handles_labels()[1]:
+            ax.legend(fontsize=fontsize_legend, ncols=1, loc="lower left", columnspacing=0.7, markerscale=1, handlelength=1.5)
         figname = "fig_phi_ky_spectrum_" + scaling_theory
         if plot_alpha_spectrum:
             figname += "_alpha-spectrum"
-            ax.set_ylim([-3, 3])
+            if ylim_alpha_spectrum is not None:
+                ax.set_ylim(ylim_alpha_spectrum)
             ax.axhline(-7 / 3, ls="--", c="0.5")
         else:
-            if scaling_theory == "CB":
-                if plot_slides:
-                    ax.set_ylim([1e-8, 1e-1])
-                else:
-                    ax.set_ylim(ymin=1e-9)
-            if scaling_theory == "GCB":
-                if plot_slides:
-                    ax.set_ylim([1e-6, 1e1])
-                    ax.set_yticks([1e-6, 1e-3, 1e0])
-                else:
-                    ax.set_ylim(ymin=1e-4, ymax=2e0)
+            if ylim_ky is not None:
+                ax.set_ylim(ylim_ky)
         plt.tight_layout()
         plt.savefig(figname + add_str + ".pdf")
         plt.close()
 
         # Phi2_NZ(kx)
         fig, ax = plt.subplots(figsize=figsize)
-        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, remove_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, delta_t_avg=delta_t_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=lw, W_instead_of_phi=W_instead_of_phi)
+        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, remove_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, time_avg=time_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=lw, W_instead_of_phi=W_instead_of_phi)
 
         figname = "fig_phi_kx_spectrum_nonzonal_" + scaling_theory
         if plot_alpha_spectrum:
             figname += "_alpha-spectrum"
-            ax.set_ylim([-3, 3])
+            if ylim_alpha_spectrum is not None:
+                ax.set_ylim(ylim_alpha_spectrum)
             ax.axhline(-7 / 3, ls="--", c="0.5")
         else:
-            if scaling_theory == "CB":
-                ax.set_ylim([1e-8, 1e-1] if plot_slides else None)
-                if not plot_slides:
-                    ax.set_ylim(ymin=2e-10)
-            if scaling_theory == "GCB":
-                if plot_slides:
-                    ax.set_ylim([1e-5, 1e2])
-                else:
-                    ax.set_ylim(ymin=5e-4, ymax=1e1)
+            if ylim_kx_nonzonal is not None:
+                ax.set_ylim(ylim_kx_nonzonal)
 
         if add_arrows:
             x_or, y_or = 7, 1e-1
@@ -139,12 +142,16 @@ for tprim in config.tprim_vals:
                 ax.plot([x_or, x_dest[i]], [y_or, y_dest[i]], c="k")
 
         ax.grid(True)
-        ax.legend(fontsize=fontsize_legend, ncols=1, loc="lower left", columnspacing=0.7, markerscale=1, handlelength=1.5)
+        # nu0_only (and any other mode with no per-line label, e.g. a
+        # single unlabeled run) would otherwise still draw an empty
+        # legend box -- only draw one if some line actually has a label.
+        if ax.get_legend_handles_labels()[1]:
+            ax.legend(fontsize=fontsize_legend, ncols=1, loc="lower left", columnspacing=0.7, markerscale=1, handlelength=1.5)
         plt.tight_layout()
         plt.savefig(figname + add_str + ".pdf")
 
         if overplot_kx_ky:
-            fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=False, color_list=colors_list, tprim_norm_list=tprim_list, qinp_norm_list=qinp_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, delta_t_avg=delta_t_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=2 * lw, W_instead_of_phi=W_instead_of_phi)
+            fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=False, color_list=colors_list, tprim_norm_list=tprim_list, qinp_norm_list=qinp_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, time_avg=time_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=2 * lw, W_instead_of_phi=W_instead_of_phi)
             ax.set_xlabel(r"$k_\perp \rho_i$")
             plt.savefig(figname + add_str + "_kxky-overplot.pdf")
 
@@ -156,20 +163,26 @@ for tprim in config.tprim_vals:
             scanObj.list_labels = [r"$E_\mathrm{RH}$"]
             colors_list = ["crimson"]
             fontsize_legend = 24
-        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, only_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, delta_t_avg=delta_t_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=4 * lw, W_instead_of_phi=W_instead_of_phi, plot_RH_phi_spectrum=True)
+        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, only_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, time_avg=time_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=4 * lw, W_instead_of_phi=W_instead_of_phi, plot_RH_phi_spectrum=True)
         if len(labels_list) == 1:
             scanObj.list_labels = [r"$E_\varphi$"]
             colors_list = ["mediumblue"]
-        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, only_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, delta_t_avg=delta_t_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=4 * lw, W_instead_of_phi=W_instead_of_phi, alpha_plot=0.5)
+        fig, ax = scanObj.plot_phi_k_spectrum(fig=fig, ax=ax, plot_kx=True, only_zonal=True, color_list=colors_list, qinp_norm_list=qinp_list, tprim_norm_list=tprim_list, scale_kmin=scale_kmin, k_exp=0, scaling_theory=scaling_theory, load_from_file=load_from_file, time_avg=time_avg, plot_alpha_spectrum=plot_alpha_spectrum, lw=4 * lw, W_instead_of_phi=W_instead_of_phi, alpha_plot=0.5)
 
         figname = "fig_phi_kx_spectrum_zonal_" + scaling_theory
         if plot_alpha_spectrum:
             figname += "_alpha-spectrum"
-            ax.set_ylim([-3, 3])
+            if ylim_alpha_spectrum is not None:
+                ax.set_ylim(ylim_alpha_spectrum)
             ax.axhline(-7 / 3, ls="--", c="0.5")
+        elif ylim_kx_zonal is not None:
+            ax.set_ylim(ylim_kx_zonal)
 
         ax.grid(True)
-        if plot_legend:
+        # nu0_only (and any other mode with no per-line label, e.g. a
+        # single unlabeled run) would otherwise still draw an empty
+        # legend box -- only draw one if some line actually has a label.
+        if plot_legend and ax.get_legend_handles_labels()[1]:
             ax.legend(fontsize=fontsize_legend, ncols=1, loc="lower left", columnspacing=0.7, markerscale=1, handlelength=1.5)
         plt.tight_layout()
         plt.savefig(figname + add_str + ".pdf")

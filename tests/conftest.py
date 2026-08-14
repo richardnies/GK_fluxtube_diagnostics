@@ -182,6 +182,114 @@ def _write_synthetic_stella_run_with_upar(filename_base, seed=0):
     return StellaRun(filename_base, code="stella")
 
 
+def _write_synthetic_stella_run_with_rh(filename_base, seed=0):
+    """Like synthetic_stella_run above, but also includes the RH_inertia/
+    RH_phi_I/RH_fluxes_phi_{even,odd}_{passing,trapped} variables needed by
+    stella_diagnostics.physics.rosenbluth_hinton and
+    stella_diagnostics.scan.rh_per_kx_scan. Real-data variable shapes
+    confirmed against stella_minimal_scan/run_tprim-4.2000/example.out.nc:
+    RH_inertia dims (species, tube, zed, kx, ri); RH_phi_I and the
+    RH_fluxes_* variables are the same but with a leading time dimension
+    (RH_fluxes_* also has a ky dimension between kx and ri)."""
+    n_t, n_kx, n_ky, n_zed, n_species, n_tube = 6, 5, 4, 9, 1, 1
+    rng = np.random.default_rng(seed)
+
+    ncpath = filename_base + ".out.nc"
+    ds = nc4.Dataset(ncpath, "w")
+    ds.createDimension("t", n_t)
+    ds.createDimension("kx", n_kx)
+    ds.createDimension("ky", n_ky)
+    ds.createDimension("zed", n_zed)
+    ds.createDimension("species", n_species)
+    ds.createDimension("tube", n_tube)
+    ds.createDimension("theta0", 1)
+    ds.createDimension("ri", 2)
+
+    v = ds.createVariable("t", "f8", ("t",))
+    v[:] = np.linspace(0, 50, n_t)
+
+    kx_vals = np.linspace(-2, 2, n_kx)
+    kx_vals[kx_vals == 0] = 1e-6
+    v = ds.createVariable("kx", "f8", ("kx",))
+    v[:] = kx_vals
+
+    v = ds.createVariable("ky", "f8", ("ky",))
+    v[:] = np.linspace(0, 2, n_ky)
+
+    zed_vals = np.linspace(-np.pi, np.pi, n_zed)
+    v = ds.createVariable("zed", "f8", ("zed",))
+    v[:] = zed_vals
+
+    v = ds.createVariable("theta0", "f8", ("theta0",))
+    v[:] = [0.0]
+
+    v = ds.createVariable("shat", "f8", ())
+    v[...] = 0.8
+
+    v = ds.createVariable("bmag", "f8", ("zed", "tube"))
+    v[:] = (1.0 + 0.1 * np.cos(zed_vals))[:, None]
+
+    v = ds.createVariable("gradpar", "f8", ("zed",))
+    v[:] = np.ones(n_zed)
+
+    v = ds.createVariable("gds22", "f8", ("zed", "tube"))
+    v[:] = np.ones((n_zed, n_tube))
+
+    v = ds.createVariable("grho", "f8", ("zed", "tube"))
+    v[:] = np.ones((n_zed, n_tube))
+
+    v = ds.createVariable("phi_vs_t", "f8", ("t", "tube", "zed", "kx", "ky", "ri"))
+    v[:] = rng.random((n_t, n_tube, n_zed, n_kx, n_ky, 2))
+
+    v = ds.createVariable("RH_inertia", "f8", ("species", "tube", "zed", "kx", "ri"))
+    v[:] = 1.0 + 0.1 * rng.random((n_species, n_tube, n_zed, n_kx, 2))
+
+    v = ds.createVariable("RH_phi_I", "f8", ("t", "species", "tube", "zed", "kx", "ri"))
+    v[:] = rng.random((n_t, n_species, n_tube, n_zed, n_kx, 2))
+
+    for name in (
+        "RH_fluxes_phi_even_passing",
+        "RH_fluxes_phi_odd_passing",
+        "RH_fluxes_phi_even_trapped",
+        "RH_fluxes_phi_odd_trapped",
+    ):
+        v = ds.createVariable(name, "f8", ("t", "species", "tube", "zed", "kx", "ky", "ri"))
+        v[:] = rng.random((n_t, n_species, n_tube, n_zed, n_kx, n_ky, 2))
+
+    v = ds.createVariable("kperp2", "f8", ("zed", "tube", "kx", "ky"))
+    v[:] = 1.0 + rng.random((n_zed, n_tube, n_kx, n_ky))
+
+    ds.close()
+
+    geo_path = filename_base + ".vmec.geo"
+    with open(geo_path, "w") as f:
+        f.write("1.0 1.4 0.0 1.0\n")
+        f.write("# header\n")
+        for z in zed_vals:
+            f.write(f"0.0 {z} " + " ".join(["0.0"] * 14) + "\n")
+
+    fluxes_path = filename_base + ".fluxes"
+    fluxes = np.zeros((n_t, 1 + 3 * n_species))
+    fluxes[:, 0] = np.linspace(0, 50, n_t)
+    fluxes[:, 1] = rng.random(n_t)
+    fluxes[:, 2] = rng.random(n_t)
+    fluxes[:, 3] = rng.random(n_t) + 0.5
+    np.savetxt(fluxes_path, fluxes)
+
+    from stella_diagnostics.io.run import StellaRun
+
+    return StellaRun(filename_base, code="stella")
+
+
+@pytest.fixture
+def synthetic_stella_run_with_rh(tmp_path):
+    """Single synthetic stella run (see _write_synthetic_stella_run_with_rh)
+    with RH_inertia/RH_phi_I/RH_fluxes_* variables, for testing
+    stella_diagnostics.scan.rh_per_kx_scan and
+    stella_diagnostics.physics.rosenbluth_hinton."""
+    return _write_synthetic_stella_run_with_rh(str(tmp_path / "run"), seed=0)
+
+
 @pytest.fixture
 def synthetic_scan_dirs(tmp_path):
     """Three synthetic stella runs (see _write_synthetic_stella_run_with_upar),

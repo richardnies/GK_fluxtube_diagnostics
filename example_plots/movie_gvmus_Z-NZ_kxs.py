@@ -6,7 +6,7 @@ Usage:
 
 <config.py> defines `dirname`, `kx_mins`, `kx_maxs` (required, `kx_mins`/
 `kx_maxs` define one row per kx band) and optionally `filename`, `code`,
-`vmin`, `vmax`, `time_min`, `time_max`, `time_idx_step`, `dt_avg`,
+`vmin`, `vmax`, `time_min`, `time_max`, `time_idx_step`, `time_avg`,
 `rerun_all`, `fps`, `img_dir`.
 """
 import sys
@@ -29,7 +29,7 @@ filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
 vmin = getattr(config, "vmin", "symm")
 vmax = getattr(config, "vmax", None)
-dt_avg = getattr(config, "dt_avg", None)
+time_avg = getattr(config, "time_avg", None)
 Nrows = len(config.kx_mins)
 
 run = StellaRun(config.dirname + "/" + filename, code=code)
@@ -52,12 +52,12 @@ def frame_fn(i, time_idx_val):
         label_kx = r"$(%.2f < |k_x| < %.2f)$" % (kx_min, kx_max)
 
         ax = axs[irow, 0]
-        _, _, im = run.plot_contour_gvmu_vpa(time_idx=time_idx_val, vmin=vmin, vmax=vmax, logarithmic=True, nozonal=True, zonal=False, fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, dt_avg=dt_avg)
+        _, _, im = run.plot_contour_gvmu_vpa(time_idx=time_idx_val, vmin=vmin, vmax=vmax, logarithmic=True, nozonal=True, zonal=False, fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, time_avg=time_avg)
         plt.colorbar(im, ax=ax)
         ax.set_title(r"$V^{-1}\int\mathrm{d}^3 r \;g_\mathrm{NZ}^2/F_M$ " + label_kx)
 
         ax = axs[irow, 1]
-        _, _, im = run.plot_contour_gvmu_vpa(time_idx=time_idx_val, vmin=vmin, vmax=vmax, logarithmic=True, nozonal=False, zonal=True, fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, dt_avg=dt_avg)
+        _, _, im = run.plot_contour_gvmu_vpa(time_idx=time_idx_val, vmin=vmin, vmax=vmax, logarithmic=True, nozonal=False, zonal=True, fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, time_avg=time_avg)
         plt.colorbar(im, ax=ax)
         ax.set_title(r"$V^{-1}\int\mathrm{d}^3 r \;g_\mathrm{Z}^2/F_M$ " + label_kx)
 
@@ -68,8 +68,8 @@ dirname_string = config.dirname.replace("/", "_")
 img_dir = getattr(config, "img_dir", None)
 if img_dir is None:
     img_dir = "fig_" + dirname_string + "_gvmus_Z-NZ_kxs"
-    if dt_avg is not None:
-        img_dir += "_dtavg-%i" % dt_avg
+    if time_avg is not None:
+        img_dir += "_dtavg-%i" % time_avg
 
 render_movie(
     img_dir, time_idx_vals, frame_fn,

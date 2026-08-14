@@ -1,5 +1,6 @@
 *.eps
 *.png
+*.pdf
 .claude/
 __pycache__/
 *.pyc
@@ -7,3 +8,21 @@ __pycache__/
 *.swp
 .DS_Store
 *.egg-info/
+.stella_diagnostics_cache/
+
+# Raw STELLA run I/O (simulation output/checkpoints, not source) -- config
+# .py files in stella_minimal_scan/ stay tracked, everything a run itself
+# produces or reads doesn't.
+*.nc
+*.nc.*
+*.fluxes
+*.omega
+*.out
+*.error
+*.scratch
+*.final_fields
+*.geometry
+*.output
+*.in
+*.input
+stella_minimal_example/

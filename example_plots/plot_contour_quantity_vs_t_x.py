@@ -17,6 +17,7 @@ Unlike the original script, the quantity-dependent preset selection
 lives in the config, not in this driver -- pick the values that match
 whichever quantity you're plotting.
 """
+import os
 import sys
 
 import matplotlib.pyplot as plt
@@ -65,7 +66,14 @@ for i_dirname, dirname in enumerate(dirnames):
             time_idx_skip=time_idx_skip, y_val=y_val, kx_order=kx_order, mult_zed=mult_zed,
             time_min=time_min_vals[i_dirname], time_max=time_max_vals[i_dirname],
         )
-        ax.set_title(dirname[len(config.dirname_base):], fontsize=14)
+        # NOTE: was dirname[len(config.dirname_base):], which silently
+        # mangled the title (e.g. "run_tprim-4.2000" -> "un_tprim-4.2000")
+        # whenever dirname_base is "." -- discover_runs joins base_dir and
+        # pattern via pathlib, which normalizes away a bare "." prefix, so
+        # dirname_base is then not actually a literal prefix of dirname
+        # even though it conceptually is one. os.path.basename is robust
+        # to that regardless of how dirname_base is spelled.
+        ax.set_title(os.path.basename(dirname.rstrip("/")), fontsize=14)
         plt.colorbar(im, ax=ax)
 
         add_qflx_phi2_overlay(ax, run)

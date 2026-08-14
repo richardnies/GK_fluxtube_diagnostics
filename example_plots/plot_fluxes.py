@@ -3,8 +3,10 @@
 Usage:
     python plot_fluxes.py <config.py>
 
-<config.py> defines `dirname` (required, the run's filename_base) and
-optionally `code`, `figname`.
+<config.py> defines `dirname` (required, the run's directory) and
+optionally `filename`, `code`, `figname` -- same dirname/filename split as
+every other single-run driver in this package (changed from treating
+dirname as the full filename_base, for config-vocabulary consistency).
 """
 import sys
 
@@ -20,8 +22,13 @@ if len(sys.argv) != 2:
 set_default_style()
 config = load_scan_config(sys.argv[1], required=("dirname",))
 
-run = StellaRun(config.dirname, code=getattr(config, "code", "stella"))
+run = StellaRun(config.dirname + "/" + getattr(config, "filename", "CBC"), code=getattr(config, "code", "stella"))
 axs = run.plot_flux_over_time()
-axs[2].set_yscale("log")
+# NOTE: heat flux Q can go negative during transients (a plain log scale
+# would silently drop those points, showing a blank plot for that whole
+# stretch -- same bug class as rh_flux_scan.py/plot_correlation_func.py,
+# fixed the same way: symlog handles the sign change, still log-like for
+# the many-orders-of-magnitude span once it settles positive).
+axs[2].set_yscale("symlog")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", "fig_fluxes.png"))
+plt.savefig(getattr(config, "figname", "fig_fluxes.pdf"))

@@ -8,5 +8,5 @@ time_max = 1e10
 time_idx_step = 5
 kx_mins = [0, 0.20]
 kx_maxs = [0.20, 2]
-dt_avg = None
+time_avg = None
 rerun_all = True

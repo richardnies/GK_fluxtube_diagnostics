@@ -10,9 +10,11 @@ if the call's params and the run's source files haven't changed since it was
 written, and transparently recomputes (and re-caches) if they have -- so e.g.
 widening a time-averaging window just works, with no manual cache deletion.
 
-Cache files are sibling files next to `run.filename_base`, following the
-same convention as the `.out.nc`/`.omega`/`.fluxes` files StellaRun already
-derives from it.
+Cache files live in a hidden `.stella_diagnostics_cache/` directory next to
+`run.filename_base`, one such directory per run directory (shared by every
+run/`filename_base` in it) -- keeps a normal `ls` of a run directory free of
+cache clutter, the same way `.git`/`.pytest_cache`/`__pycache__` stay out of
+the way elsewhere.
 """
 
 import functools
@@ -59,8 +61,22 @@ def cache_key(name, params, version=0):
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
+CACHE_DIR_NAME = ".stella_diagnostics_cache"
+
+
+def _cache_dir(run):
+    """Hidden directory (sibling to run.filename_base's own directory)
+    that holds every cache file for this run -- keeps a run directory's
+    normal `ls` output free of the __cache_*.npz files, the same way
+    .git/.pytest_cache/__pycache__ stay out of the way elsewhere."""
+    d = Path(run.filename_base).parent / CACHE_DIR_NAME
+    d.mkdir(exist_ok=True)
+    return d
+
+
 def _cache_path(run, name, key):
-    return run.filename_base + "__cache_" + name + "_" + key + ".npz"
+    base = Path(run.filename_base).name
+    return str(_cache_dir(run) / (base + "__cache_" + name + "_" + key + ".npz"))
 
 
 def _source_fingerprint(run):
@@ -80,20 +96,36 @@ def _is_cache_disabled():
     return os.environ.get("STELLA_DIAGNOSTICS_NO_CACHE", "") not in ("", "0")
 
 
+def _is_scalar(x):
+    return np.isscalar(x) or isinstance(x, (int, float, complex, bool))
+
+
 def _pack_result(result):
-    """-> (return_shape, scalar_mask, arrays) where arrays is a dict of
-    array-name -> ndarray suitable for np.savez_compressed."""
+    """-> (return_shape, scalar_mask, arrays, keys) where arrays is a dict of
+    array-name -> ndarray suitable for np.savez_compressed, and keys is the
+    dict field-name order (None for "single"/"tuple" shapes)."""
+    if isinstance(result, dict):
+        keys = list(result.keys())
+        scalar_mask = [_is_scalar(result[k]) for k in keys]
+        arrays = {f"out_{k}": np.asarray(result[k]) for k in keys}
+        return "dict", scalar_mask, arrays, keys
     if isinstance(result, tuple):
-        scalar_mask = [np.isscalar(x) or isinstance(x, (int, float, complex, bool)) for x in result]
+        scalar_mask = [_is_scalar(x) for x in result]
         arrays = {f"out_{i}": np.asarray(x) for i, x in enumerate(result)}
-        return "tuple", scalar_mask, arrays
-    return "single", [False], {"out": np.asarray(result)}
+        return "tuple", scalar_mask, arrays, None
+    return "single", [False], {"out": np.asarray(result)}, None
 
 
-def _unpack_result(npz, return_shape, scalar_mask):
+def _unpack_result(npz, return_shape, scalar_mask, keys=None):
     if return_shape == "single":
         arr = npz["out"]
         return arr.item() if scalar_mask[0] else arr
+    if return_shape == "dict":
+        out = {}
+        for k, is_scalar in zip(keys, scalar_mask):
+            arr = npz[f"out_{k}"]
+            out[k] = arr.item() if is_scalar else arr
+        return out
     out = []
     for i, is_scalar in enumerate(scalar_mask):
         arr = npz[f"out_{i}"]
@@ -105,11 +137,11 @@ def clear_cache(run, name=None):
     """Delete cache file(s) for `run`. If `name` is given, only entries for
     that quantity name are removed; otherwise every cache entry for this run
     is removed. Returns the number of files deleted."""
-    parent = Path(run.filename_base).parent
+    cache_dir = _cache_dir(run)
     base = Path(run.filename_base).name
     marker = "__cache_" + (name + "_" if name else "")
     n = 0
-    for p in parent.glob(base + marker + "*.npz"):
+    for p in cache_dir.glob(base + marker + "*.npz"):
         p.unlink()
         n += 1
     return n
@@ -121,7 +153,10 @@ def get_cached(run, name, compute_fn, params=None, version=0, force=False):
     haven't changed since it was written.
 
     compute_fn: zero-argument callable. Its return value may be a single
-      ndarray, or a tuple mixing ndarrays and python scalars.
+      ndarray, a tuple mixing ndarrays and python scalars, or a dict mixing
+      ndarrays and python scalars (dict is preferred over a long positional
+      tuple when there are many named fields -- easier to extend without
+      reordering existing positions, and self-documenting at call sites).
     params: dict of the call-site values that determine the numeric result
       (NOT cosmetic plot kwargs like color/label). Part of the cache key --
       different params means a different cache entry, so e.g. changing a
@@ -152,13 +187,13 @@ def get_cached(run, name, compute_fn, params=None, version=0, force=False):
                     )
                 )
                 if fresh:
-                    return _unpack_result(npz, meta["return_shape"], meta["scalar_mask"])
+                    return _unpack_result(npz, meta["return_shape"], meta["scalar_mask"], meta.get("keys"))
         except (OSError, KeyError, ValueError, json.JSONDecodeError):
             pass  # corrupt/partial cache file -- fall through and recompute
 
     result = compute_fn()
 
-    return_shape, scalar_mask, arrays = _pack_result(result)
+    return_shape, scalar_mask, arrays, keys = _pack_result(result)
     meta = {
         "name": name,
         "version": version,
@@ -168,6 +203,7 @@ def get_cached(run, name, compute_fn, params=None, version=0, force=False):
         "created": time.time(),
         "return_shape": return_shape,
         "scalar_mask": scalar_mask,
+        "keys": keys,
     }
     # np.savez_compressed appends ".npz" to string filenames that don't
     # already end with it, so write through an explicit file object to

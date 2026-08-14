@@ -13,6 +13,7 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
+from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
 
 
@@ -33,7 +34,6 @@ def plot_spectrum2(run, quantity, kx_or_ky, fig=None, ax=None, species_idx=0, ti
 
     else:
         quantity_zed_kx_ky, zed, kx, ky, time_eval = run.get_quantity_zed_kx_ky(quantity=quantity, time_idx=time_idx, species_idx=species_idx, time_val=time_val, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg)
-        #quantity_kx_ky, kx, ky, time_eval = run.get_quantity_kx_ky(quantity=quantity, zed_val=zed_val, zed_idx=zed_idx, time_idx=time_idx, species_idx=species_idx, time_val=time_val, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg)
 
 
     fig, ax = get_or_create_ax(fig, ax, nrows=1, ncols=1, figsize=(12,9))
@@ -44,47 +44,29 @@ def plot_spectrum2(run, quantity, kx_or_ky, fig=None, ax=None, species_idx=0, ti
         dk = ky[1]-ky[0]
         quantity_zed_k = np.mean(np.real(quantity_zed_kx_ky[:,1:]*np.conj(quantity_zed_kx_ky[:,1:])), axis=2)/dk
 
-        #quantity_k = np.sum(np.abs(quantity_kx_ky[1:])**2, axis=1)/dk
-
     if kx_or_ky == "ky":
         k  = ky[1:]
         dk = kx[1]-kx[0]
         quantity_zed_k = np.mean(np.real(quantity_zed_kx_ky[:,:,1:]*np.conj(quantity_zed_kx_ky[:,:,1:])), axis=1)/dk
-        #quantity_k = np.sum( np.abs(quantity_kx_ky[:,1:])**2, axis=0)*dk
 
     # Average over zed
     zed_weight = run.get_zed_weight(mult_zed=mult_zed, zed=zed)
     quantity_k = np.sum(quantity_zed_k*zed_weight[:,None], axis=0)
 
-#        # Rescale quantities according to Critical Balance
-#        if scale_CB:
-#            print("Rescaling according to critical balance")
-#            tprim = run.ncdata.variables['tprim'][0]
-#            kappa = tprim
-#            if kx_or_ky == "kx":
-##                quantity_k = quantity_k / kappa**(7/2)
-#            if kx_or_ky == "ky":
-#                k = k * kappa
-##                quantity_k = quantity_k / kappa**(4)
-#            quantity_k = quantity_k / kappa**(3)
-            
-
     if scale_kmin:
-#            print("Rescaling quantity with kmin (to be able to compare sims with different x0,y0)")
         quantity_k = quantity_k / np.abs(k[1]-k[0])**2
 
     ax.loglog(k, quantity_k, label=label, lw=lw, c=c, marker=marker, ls=ls)
-#        ax.set_xlim(xmin=0.75*k.min())
-    
+
     return fig, ax, time_eval
 
 
-def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, zed_idx=None, time_idx=-1, label=None, ls=None, color=None, marker=None, substract_background_temp=False, normalise=False, time_avg=None, nx=None, sum_nonzonal=False, mult_zed=None, kx_order_min=0, kxmin_filter=1e5, mult=1):
+def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, zed_idx=None, time_idx=-1, label=None, ls=None, color=None, marker=None, substract_background_temp=False, normalise=False, time_avg=None, nx=None, sum_nonzonal=False, mult_zed=None, kx_order_min=0, kx_lowpass_cutoff=1e5, mult=1):
 
     if not sum_nonzonal:
-        f_Z,       x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+0, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kxmin_filter=kxmin_filter)
-        fprime_Z,  x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+1, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kxmin_filter=kxmin_filter)
-        fdprime_Z, x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+2, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kxmin_filter=kxmin_filter)
+        f_Z,       x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+0, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kx_lowpass_cutoff=kx_lowpass_cutoff)
+        fprime_Z,  x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+1, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kx_lowpass_cutoff=kx_lowpass_cutoff)
+        fdprime_Z, x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order_min+2, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kx_lowpass_cutoff=kx_lowpass_cutoff)
 
         # Make 1D array
         f_Z       = mult*f_Z[:,0]
@@ -102,12 +84,6 @@ def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, 
         fdprime_Z = mult*np.sqrt(np.mean(np.abs(fdprime_Z)**2 , axis=1))
 
 
-#        if quantity=="temperature" and substract_background:
-#            run.ncdata = nc4.Dataset(run.netcdf_file,'r')
-#            tprim  = run.ncdata.variables['tprim'][:]
-#            f_Z    = f_Z - tprim*x
-#            fdprime_Z    = fdprime_Z - tprim
-
     if normalise:
         f_Z       = f_Z       / np.abs(f_Z      ).max()
         fprime_Z  = fprime_Z  / np.abs(fprime_Z ).max()
@@ -117,17 +93,14 @@ def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, 
         fig, axs = plt.subplots(nrows=3,ncols=1, figsize=(8,14), sharex=True)
         plt.subplots_adjust(left=0.15,right=0.95, hspace=0.05)
 
-    title = r"$t= %.2f$" % (time_eval)
+    title = r"$t= %.2f$" % (time_eval if np.ndim(time_eval) == 0 else time_eval[-1])
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
     fig.suptitle(title)
 
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- string-concatenates label below, which raises
-    # TypeError whenever the default label=None is used.
     axs[0].plot(x, f_Z,       ls=ls, c=color, marker=marker, label=label)
-    axs[1].plot(x, fprime_Z,  ls=ls, c=color, marker=marker, label=r"$\partial_x $" + label)
-    axs[2].plot(x, fdprime_Z, ls=ls, c=color, marker=marker, label=r"$\partial^2_x $" + label)
+    axs[1].plot(x, fprime_Z,  ls=ls, c=color, marker=marker, label=(r"$\partial_x $" + label) if label is not None else None)
+    axs[2].plot(x, fdprime_Z, ls=ls, c=color, marker=marker, label=(r"$\partial^2_x $" + label) if label is not None else None)
 
     for ax in axs:
         ax.grid(True)
@@ -138,7 +111,7 @@ def plot_quantity_zonal(run, quantity="phi", species_idx=0, fig=None, axs=None, 
         axs[1].legend()
         axs[2].legend()
 
-    axs[2].set_xlabel(r"$x/\rho$")
+    axs[2].set_xlabel(r"$x/%s$" % get_rho_label(run.ncdata))
     #axs[0].set_ylabel(r"$f_Z$")
     #axs[1].set_ylabel(r"$f'_Z$")
     #axs[2].set_ylabel(r"$f''_Z$")
@@ -187,11 +160,6 @@ def plot_quantity1_quantity2(run, quantities, fig=None, ax=None, ls="--", c=None
                 phi_x_y,  x, y, time_eval = run.get_quantity_x_y("phi", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, mult_zed=mult_zed)
                 Pprp_x_y,  x, y, time_eval = run.get_quantity_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, mult_zed=mult_zed)
                 f_x_y = phi_x_y * Pprp_x_y
-
-#                elif quantity == "dyphi-T":
-#                    dyphi_x_y,  x, y, time_eval = run.get_quantity_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny)
-#                    T_x_y,  x, y, time_eval = run.get_quantity_x_y("temperature", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny)
-#                    f_x_y = dyphi_x_y * T_x_y
 
             elif quantity == "dyphi-dyPprp":
                 dyphi_x_y,  x, y, time_eval = run.get_quantity_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny)
@@ -360,11 +328,6 @@ def plot_quantity_t_k(run, quantity="phi", fig=None, ax=None, remove_zonal=False
     if quantity in ["phi", "density", "upar", "temperature", "pressure_perp", "pressure_par", "qpar", "qperp"]:
         f_t_zed_kx_ky = f_t_zed_kx_ky_ri[:,:,:,:,0] + 1j*f_t_zed_kx_ky_ri[:,:,:,:,1]
 
-#            if eval_real:
-#                f_t_zed_kx_ky = f_t_zed_kx_ky_ri[:,:,:,:,0]
-#            else:
-#                f_t_zed_kx_ky = np.abs(f_t_zed_kx_ky_ri[:,:,:,:,0] + 1j*f_t_zed_kx_ky_ri[:,:,:,:,1])
-
     # Filter out ky's now if requested to avoid work in summing
     if only_zonal:
         ky_idx = 0
@@ -374,31 +337,25 @@ def plot_quantity_t_k(run, quantity="phi", fig=None, ax=None, remove_zonal=False
 
     # x-derivatives
     f_t_zed_kx_ky = f_t_zed_kx_ky * np.abs(kx[None,None,:,None])**kx_order
-    #f_t_zed_kx_ky = f_t_zed_kx_ky * np.abs(kx[None,None,:,None]/(kx[1]-kx[0]))**kx_order
 
     # y-derivatives
     f_t_zed_kx_ky = f_t_zed_kx_ky * np.abs(ky[None,None,None,:])**ky_order
-    #f_t_zed_kx_ky = f_t_zed_kx_ky * np.abs(ky[None,None,None,:]/(ky[1]-ky[0]))**ky_order
 
-
-#        print("Extracting kx's...")
     if kx_idxs is None:
         print("Will plot for all kx")
         kx_idxs = 1e15
 
     if sum_kx or len(np.shape(kx_idxs)) == 0:
         kx_idxs = [i for i in range(len(kx)) if (np.abs(kx[i]) < kx_idxs and np.abs(kx[i]) > kx_min)]
-        #kx_idxs = [i for i in range(len(kx)) if (np.abs(kx[i]) < kx_idxs and kx[i] > 0)]
 
     kx_plot  = kx[kx_idxs]
     idx_sort = np.argsort(kx_plot)
     kx_sort = kx_plot[idx_sort]
     kx_idxs_sort = np.array(kx_idxs)[idx_sort.astype(int)]
     nx = len(kx_idxs_sort)
-    
+
     if colors is None:
         colors = sns.color_palette("coolwarm", nx)
-        #colors = sns.color_palette("rocket", nx)
     elif len(np.shape(colors)) == 0:
         colors = sns.color_palette(colors, nx)
 
@@ -420,43 +377,8 @@ def plot_quantity_t_k(run, quantity="phi", fig=None, ax=None, remove_zonal=False
         f_t_kx = np.sum(np.abs(f_t_kx_ky), axis=2)
     elif ky_idx == "SB":
         f_t_kx = np.sum(f_t_kx_ky*np.exp(1j*np.pi/2* ky[None,None,:]/ky[-1]), axis=2)
-        #f_t_zed_kx = np.sum(f_t_zed_kx_ky[:,:,:,::2], axis=3)
-
-        #f_zed_kx_ky_abs = np.abs(f_t_zed_kx_ky[-1,:,:,1:])
-        #print(np.shape(f_zed_kx_ky_abs))
-        #argmax = np.unravel_index(np.argmax(f_zed_kx_ky_abs), f_zed_kx_ky_abs.shape)
-        #print(argmax)
-        #ky_idx_SB = argmax[2]
-        #f_t_zed_kx = f_t_zed_kx_ky[:,:,:,1+ky_idx_SB]
     else:
         f_t_kx = f_t_kx_ky[:,:,ky_idx]
-
-   #     if ky_idx is None:
-   #         if ratio_zonal_nonzonal:
-   #             f_t_zed_kx =  f_t_zed_kx_ky[:,:,:,0] / np.sum(f_t_zed_kx_ky[:,:,:,1:], axis=3)
-   #         elif remove_zonal:
-   #             f_t_zed_kx = np.sum(f_t_zed_kx_ky[:,:,:,1:], axis=3)
-   #         elif only_zonal:
-   #             f_t_zed_kx = f_t_zed_kx_ky[:,:,:,0]
-   #         else:
-   #             f_t_zed_kx = np.sum(f_t_zed_kx_ky, axis=3)
-   #     elif ky_idx == "abs":
-   #         f_t_zed_kx = np.sum(np.abs(f_t_zed_kx_ky), axis=3)
-   #     elif ky_idx == "SB":
-   #         f_t_zed_kx = np.sum(f_t_zed_kx_ky*np.exp(1j*np.pi/2* ky[None,None,None,:]/ky[-1]), axis=3)
-   #         #f_t_zed_kx = np.sum(f_t_zed_kx_ky[:,:,:,::2], axis=3)
-
-   #         #f_zed_kx_ky_abs = np.abs(f_t_zed_kx_ky[-1,:,:,1:])
-   #         #print(np.shape(f_zed_kx_ky_abs))
-   #         #argmax = np.unravel_index(np.argmax(f_zed_kx_ky_abs), f_zed_kx_ky_abs.shape)
-   #         #print(argmax)
-   #         #ky_idx_SB = argmax[2]
-   #         #f_t_zed_kx = f_t_zed_kx_ky[:,:,:,1+ky_idx_SB]
-   #     else:
-   #         f_t_zed_kx = f_t_zed_kx_ky[:,:,:,ky_idx]
-   #
-   #     # Take zed average
-   #     f_t_kx = np.sum(dl_over_B_avg[None,:,None]*f_t_zed_kx, axis=1)
 
     if sum_kx:
         kx_idxs_sort = [0]
@@ -484,13 +406,13 @@ def plot_quantity_t_k(run, quantity="phi", fig=None, ax=None, remove_zonal=False
                     label = labels[i_kx]
                 elif labels == "firstlast":
                     if i_kx == 0 or i_kx == len(kx_idxs_sort)-1:
-                        label = r"$k_x \rho_i = %.3f$" % (kx_sort[i_kx])
+                        label = r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx_sort[i_kx])
                     else:
                         label = None
                 elif labels == "minlast":
                     #if kx_sort[i_kx] == np.abs(kx_sort).min() or i_kx == len(kx_idxs_sort)-1 or i_kx==0:
                     if kx_sort[i_kx] == np.abs(kx_sort[np.abs(kx_sort)>0]).min() or i_kx == len(kx_idxs_sort)-1:
-                        label = r"$k_x \rho_i = %.3f$" % (kx_sort[i_kx])
+                        label = r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx_sort[i_kx])
                     else:
                         label = None
                 else:
@@ -570,7 +492,7 @@ def plot_phi_t_ky(run, fig=None, ax=None, zed_idx=None, remove_zonal=False, only
     else:
         ax.plot(time, phi_t,label=label, ls=ls, c=c, lw=lw)
 
-    ax.set_xlabel(r"$t v_T/a$")
+    ax.set_xlabel(r"$t %s/a$" % get_vt_label(run.ncdata))
     if norm_to_t0 and plot_abs:
         label = r"$|\varphi(t)/\varphi(t=0)|^2$"
     elif not norm_to_t0 and plot_abs:
@@ -581,7 +503,7 @@ def plot_phi_t_ky(run, fig=None, ax=None, zed_idx=None, remove_zonal=False, only
         label = r"$\varphi(t)$"
 
     if norm_kperp2:
-        label = label + r"$/\langle (k_\perp \rho)^2\rangle$"
+        label = label + r"$/\langle (k_\perp %s)^2\rangle$" % get_rho_label(run.ncdata)
     ax.set_ylabel(label)
 
     ax.legend()

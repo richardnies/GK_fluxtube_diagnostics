@@ -136,6 +136,36 @@ def test_round_trip_tuple_arrays_and_scalars(synthetic_stella_run):
     assert isinstance(i, int) and i == 7
 
 
+def test_round_trip_dict_arrays_and_scalars(synthetic_stella_run):
+    run = synthetic_stella_run
+    value = {"arr": np.array([1.0, 2.0, 3.0]), "flt": 4.5, "flag": True, "count": 7}
+
+    cache.get_cached(run, "q", lambda: value, params={})
+    out = cache.get_cached(run, "q", lambda: value, params={})
+
+    assert set(out.keys()) == {"arr", "flt", "flag", "count"}
+    np.testing.assert_array_equal(out["arr"], value["arr"])
+    assert isinstance(out["flt"], float) and out["flt"] == 4.5
+    assert isinstance(out["flag"], (bool, np.bool_)) and out["flag"] == True  # noqa: E712
+    assert isinstance(out["count"], int) and out["count"] == 7
+
+
+def test_dict_cache_hit_no_recompute(synthetic_stella_run):
+    run = synthetic_stella_run
+    calls = {"n": 0}
+
+    def compute():
+        calls["n"] += 1
+        return {"a": np.array([1.0]), "b": 2.0}
+
+    cache.get_cached(run, "q", compute, params={"x": 1})
+    cache.get_cached(run, "q", compute, params={"x": 1})
+    assert calls["n"] == 1
+
+    cache.get_cached(run, "q", compute, params={"x": 2})
+    assert calls["n"] == 2
+
+
 def test_cached_decorator_matches_direct_call(synthetic_stella_run):
     run = synthetic_stella_run
     calls = {"n": 0}

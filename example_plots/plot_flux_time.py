@@ -5,10 +5,19 @@ Usage:
 
 `<scan_config.py>` is a small data-only Python file defining `dirnames`
 (required) and optionally `labels`, `colors`, `filename`, `code`, `Q_div`,
-`skip_phi2`, `plot_ratio`, `ylim`, `figname_add` -- see scan_configs/ for
-worked examples (scan_nu_var.py, scan_upwind.py, scan_nu_var2.py), each
-corresponding to a comparison that used to be a hardcoded, commented-in/out
-block inside this script.
+`skip_phi2`, `plot_ratio`, `species_idx`, `ylim`, `xmin_loglog` (lower
+x-bound for the second, log-x figure -- default None lets matplotlib
+autoscale from the smallest nonzero time value), `figname_add` -- see
+scan_configs/ for worked examples (scan_nu_var.py, scan_upwind.py,
+scan_nu_var2.py), each corresponding to a comparison that used to be a
+hardcoded, commented-in/out block inside this script.
+
+`species_idx` (default None) plots every species in each run, one Qflx/
+E_upar line per species -- see
+stella_diagnostics.scan.flux_energy_scan.plot_qflx_and_energy_vs_time's
+docstring for how species/run/quantity are distinguished by label, color,
+and alpha. Pass an int to restrict to just one species (the previous,
+implicit species_idx=0-only behavior).
 
 This script itself is never copied or edited to add a new comparison --
 only new config files are added. Any improvement to the underlying analysis
@@ -36,6 +45,7 @@ fig, ax = plot_qflx_and_energy_vs_time(
     Q_div=getattr(config, "Q_div", 10),
     skip_phi2=getattr(config, "skip_phi2", False),
     plot_ratio=getattr(config, "plot_ratio", False),
+    species_idx=getattr(config, "species_idx", None),
 )
 
 figname_add = getattr(config, "figname_add", "")
@@ -44,6 +54,10 @@ ax.set_xlim(xmin=0)
 ax.set_ylim(getattr(config, "ylim", None))
 fig.savefig("fig_qflx_over_time" + figname_add + ".pdf")
 
-ax.set_xlim(xmin=1e2)
+xmin_loglog = getattr(config, "xmin_loglog", None)
+if xmin_loglog is not None:
+    ax.set_xlim(xmin=xmin_loglog)
+else:
+    ax.set_xlim(auto=True)
 ax.set_xscale("log")
 fig.savefig("fig_qflx_over_time" + figname_add + "_loglog.pdf")

@@ -84,8 +84,8 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
             f_zed_kx_ky_ri = f_zed_kx_ky_ri - np.sum(f_zed_kx_ky_ri*zed_weight[:,None,None,None], axis=0)
 
         elif quantity=="(1-Gamma0)phi":
-            kperp2_zed_kx_ky = run.ncdata.variables['kperp2'][:][:,species_idx,:,:] 
-            Gamma0 = specialfunc.iv(0, kperp2/2) * np.exp(-kperp2/2)
+            kperp2_zed_kx_ky = run.ncdata.variables['kperp2'][:][:,species_idx,:,:]
+            Gamma0 = specialfunc.iv(0, kperp2_zed_kx_ky/2) * np.exp(-kperp2_zed_kx_ky/2)
             f_zed_kx_ky_ri = run.ncdata.variables['phi_vs_t'][time_idx,0,:,:,:,:]*(1-Gamma0)[:,:,:,None]
  
         elif quantity=="E_Z":
@@ -105,9 +105,6 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
         elif quantity=="upar":
             # upar(t, species, tube, zed, kx, ky, ri)
             f_zed_kx_ky_ri = run.ncdata.variables['upar'][time_idx,species_idx,0,:,:,:,:]
-        #elif quantity=="upar_over_phi":
-        #    # upar(t, species, tube, zed, kx, ky, ri)
-        #    f_zed_kx_ky_ri = run.ncdata.variables['upar'][time_idx,species_idx,0,:,:,:,:]/run.ncdata.variables['phi_vs_t'][time_idx,0,:,:,:,:]
         elif quantity=="temperature":
             if run.code == "stella":
                 # temperature(t, species, tube, zed, kx, ky, ri)
@@ -140,7 +137,21 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
             elif run.code == "GX":
                 f_zed_kx_ky_ri = np.transpose( run.ncdata_big['Diagnostics']['Tperp'][time_idx, species_idx] , axes=[2,1,0,3] )
         elif quantity=="pressure":
-            f_zed_kx_ky_ri = run.ncdata.variables['pressure'][time_idx,species_idx,0,:,:,:,:]
+            try:
+                f_zed_kx_ky_ri = run.ncdata.variables['pressure'][time_idx,species_idx,0,:,:,:,:]
+            except KeyError:
+                # Some stella builds don't write a combined 'pressure'
+                # variable -- reconstruct from density/temperature/
+                # pressure_perp, matching quantities/realspace.py's
+                # get_quantity_zed_x_y (a separate, independently
+                # maintained copy of this same dispatch -- see the
+                # ~40-branch quantity dispatch duplication noted in
+                # README.md's "Known issues") which already had this
+                # fallback.
+                n_zed_kx_ky_ri = run.ncdata.variables['density'][time_idx,species_idx,0,:,:,:,:]
+                T_zed_kx_ky_ri = run.ncdata.variables['temperature'][time_idx,species_idx,0,:,:,:,:]
+                Pprp_zed_kx_ky_ri = run.ncdata.variables['pressure_perp'][time_idx,species_idx,0,:,:,:,:]
+                f_zed_kx_ky_ri = 1.5*(T_zed_kx_ky_ri+n_zed_kx_ky_ri) - 0.5*Pprp_zed_kx_ky_ri
         elif quantity=="chi":
             try:
                 f_zed_kx_ky_ri = run.ncdata.variables['chi'][time_idx,species_idx,0,:,:,:,:]
@@ -148,9 +159,6 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
                 print("chi not found in NETCDF! Using pressure instead.")
                 f_zed_kx_ky_ri = run.ncdata.variables['pressure'][time_idx,species_idx,0,:,:,:,:]
 
-        #elif quantity=="temp_over_phi":
-        #    # upar(t, species, tube, zed, kx, ky, ri)
-        #    f_zed_kx_ky_ri = run.ncdata.variables['temperature'][time_idx,species_idx,0,:,:,:,:]/run.ncdata.variables['phi_vs_t'][time_idx,0,:,:,:,:]
         elif quantity=="pressure_par":
             P_zed_kx_ky_ri = run.ncdata.variables['pressure'][time_idx,species_idx,0,:,:,:,:]
             Pprp_zed_kx_ky_ri = run.ncdata.variables['pressure_perp'][time_idx,species_idx,0,:,:,:,:]
@@ -227,15 +235,6 @@ def get_quantity_kx_ky(run, quantity, zed_val = None, zed_idx=None, time_idx=-1,
         time_eval = run.ncdata.variables['t'][time_idx]
     else:
         f_zed_kx_ky, zed, kx, ky, time_eval = run.get_quantity_zed_kx_ky(quantity, time_idx=time_idx, species_idx=species_idx, time_val=time_val, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, alt_slow_eval=alt_slow_eval)
-
-        #elif run.code == "GX":
-            #phi2_vs_kxky = np.transpose(run.ncdata['Spectra']['Pkxkyst'][:,0,:,:], axes=(0,2,1))
-            #print("Warning! Not really plotting phi spectrum due to GX diagnostics.")
-            #kperp = np.sqrt(kx[None,:,None]**2 + ky[None,None,:]**2)
-            #Gamma0fac_vs_kxky = specialfunc.iv(0, kperp/2) * np.exp(-kperp/2)
-            #phi2_vs_kxky = phi2_vs_kxky / (1-Gamma0fac_vs_kxky)
- 
-            #f_kx_ky_ri = np.sqrt(phi2_vs_kxky)
 
     # if zed_val is not None, find zed_idx matching zed_val most closely
     if zed_val is not None:

@@ -13,7 +13,8 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
-from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
+from stella_diagnostics.io.codes import get_rho_label, get_vt_label
+from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax, resolve_vmin_vmax
 
 
 def read_phi_vs_zed(run, time_avg=None, time_idx=-1, normalise_phi=True, kx_idx=0, ky_idx=0, eval_real=True, squared=False, remove_zonal=False):
@@ -63,20 +64,18 @@ def read_phi_vs_zed(run, time_avg=None, time_idx=-1, normalise_phi=True, kx_idx=
     return phi_vs_zed, zed
 
 
-def plot_phi_vs_zed(run, ax=None, label=None, ls=None, color=None, zed_times_nfield_periods=False, time_idx=-1, normalise_phi=True):
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- this doesn't expose kx_idx/ky_idx, so it always
-    # calls read_phi_vs_zed() with its defaults kx_idx=0, ky_idx=0, i.e.
-    # the (kx=0, ky=0) mode, which stella always sets identically to zero.
-    # With the also-default normalise_phi=True, read_phi_vs_zed() then
-    # divides by max(phi)=0, giving an all-NaN/masked array -- so calling
-    # plot_phi_vs_zed() with no arguments silently produces a blank plot
-    # on every stella run. Use run.read_phi_vs_zed(kx_idx=..., ky_idx=...)
-    # directly (or plot_quantities_over_zed(plot_phi=True, kx_idx_phi=...,
-    # ky_idx_phi=...)) with a non-trivial (kx, ky) to get a real curve.
+def plot_phi_vs_zed(run, ax=None, label=None, ls=None, color=None, zed_times_nfield_periods=False, time_idx=-1, normalise_phi=True, kx_idx=None, ky_idx=None):
+    # kx_idx/ky_idx default to None (sum over all kx/ky, same convention
+    # read_phi_vs_zed already uses for None) rather than the previous
+    # hardcoded (kx_idx=0, ky_idx=0) -- that's the (kx=0, ky=0) mode,
+    # which stella always sets identically to zero, so with the
+    # also-default normalise_phi=True, read_phi_vs_zed() divided by
+    # max(phi)=0 and silently produced a blank plot on every stella run.
+    # Pass explicit kx_idx/ky_idx for a single-mode view instead of the
+    # summed total.
     fig, ax = get_or_create_ax(ax=ax, nrows=1, ncols=1, figsize=(12,9))
 
-    phi_vs_t, zed = run.read_phi_vs_zed(time_idx=time_idx, normalise_phi=normalise_phi)
+    phi_vs_t, zed = run.read_phi_vs_zed(time_idx=time_idx, normalise_phi=normalise_phi, kx_idx=kx_idx, ky_idx=ky_idx)
 
     time_eval   = run.ncdata.variables['t'][time_idx]
 
@@ -90,17 +89,17 @@ def plot_phi_vs_zed(run, ax=None, label=None, ls=None, color=None, zed_times_nfi
 
     return ax, time_eval
 
-    # NOTE (pre-existing bug, not fixed -- see decision to preserve behavior
-    # byte-for-byte during the restructure): the comment below originally
-    # read "#######  Plot electrostatic potential over the flux tube def
-    # plot_phi2_vs_t_zed(...):" in the source file this was extracted from.
-    # The leading "#" swallowed the `def` line, so what would have been a
-    # separate plot_phi2_vs_t_zed(...) method never existed as a callable
-    # function -- the code below is unreachable dead code appended after
-    # the `return` above. Left as-is; a real fix would either restore
-    # plot_phi2_vs_t_zed as its own function or delete this block.
-    #######  Plot electrostatic potential over the flux tube def plot_phi2_vs_t_zed(run, tube=0, ax=None, label=None, zed_times_nfield_periods=False, remove_zonal=False):
 
+def plot_phi2_vs_t_zed(run, tube=0, ax=None, label=None, zed_times_nfield_periods=False, remove_zonal=False):
+    """|phi|^2(zed, t) contour for one run.
+
+    Restored as its own callable function -- previously unreachable: the
+    source this was extracted from had a comment
+    ("#######  Plot electrostatic potential over the flux tube def
+    plot_phi2_vs_t_zed(...):") whose leading "#" swallowed the `def`
+    line, leaving this code as dead code appended after
+    plot_phi_vs_zed's `return`.
+    """
     fig, ax = get_or_create_ax(ax=ax, nrows=1, ncols=1, figsize=(12,9))
 
     phi2_vs_t_zed, time, zed = run.read_phi2_vs_t_zed(tube, remove_zonal=remove_zonal)
@@ -145,8 +144,6 @@ def plot_flux_tube_geometry(run, fig=None, axs=None, label=None, plot_phi=True, 
         if run.code == "stella":
             bmag     = run.ncdata.variables['bmag'][:]
             i = 0
-            #np.savetxt("data_bmag.dat", bmag)
-            #np.savetxt("data_zed.dat", zed)
 
             gradpar  = run.ncdata.variables['gradpar'][:]
             kperp2   = np.zeros_like(gradpar)#run.ncdata.variables['kperp2'][:][:,0,0,0] 
@@ -271,7 +268,7 @@ def plot_flux_tube_geometry(run, fig=None, axs=None, label=None, plot_phi=True, 
     plot_y_over_zed(axs[2,2], zed, gds22, ylabel=r"$|\nabla x|^2$", no_xticks=False, set_xlim=set_xlim, color=color, ls=ls, xlim=xlim)
     axs[2,2].set_ylim(ymin=0)
 
-    plot_y_over_zed(axs[0,3], zed, kperp2, ylabel=r"$(\rho_i k_\perp)^2$", no_xticks=True, set_xlim=set_xlim, color=color, ls=ls, xlim=xlim)
+    plot_y_over_zed(axs[0,3], zed, kperp2, ylabel=r"$(%s k_\perp)^2$" % get_rho_label(run.ncdata), no_xticks=True, set_xlim=set_xlim, color=color, ls=ls, xlim=xlim)
     plot_y_over_zed(axs[1,3], zed, jacob, ylabel=r"$\sqrt{g}$", no_xticks=True, set_xlim=set_xlim, color=color, ls=ls, xlim=xlim)
     plot_y_over_zed(axs[2,3], zed, grho, ylabel=r"$|\nabla \rho|$", no_xticks=False, set_xlim=set_xlim, color=color, ls=ls, xlim=xlim)
 
@@ -426,7 +423,7 @@ def plot_quantities_over_zed(run, fig=None, ax=None, mult_zed=1, zed_times_nfiel
         return fig, ax
 
 
-def plot_quantity_zed_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, sideband=False, time_idx_skip=1, normalise_each_t=False, cmap='inferno', kx_order=0, ky_order=0, nx=None, ny=None, avg_norm=None, time_min=0, time_max=99999, mult_zed=None, kxmin_filter=np.inf, plot_zed_avg=True):
+def plot_quantity_zed_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, sideband=False, time_idx_skip=1, normalise_each_t=False, cmap='inferno', kx_order=0, ky_order=0, nx=None, ny=None, avg_norm=None, time_min=0, time_max=99999, mult_zed=None, kx_lowpass_cutoff=np.inf, plot_zed_avg=True):
 
 
     zed    = run.ncdata.variables['zed'][:]
@@ -450,61 +447,61 @@ def plot_quantity_zed_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, 
         x_der_taken = False
         y_der_taken = False
         if quantity == "phi-phi":
-            phi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, remove_zonal=True, only_zonal=False, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            phi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, remove_zonal=True, only_zonal=False, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = phi_zed_x_y**2
 
         elif quantity == "phi-pressure_perp":
-            phi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            Pprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            phi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            Pprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = phi_zed_x_y * Pprp_zed_x_y
 
         elif quantity == "dyphi-T":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            T_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("temperature", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            T_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("temperature", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y * T_zed_x_y
 
         elif quantity == "dyphi-upar":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            upar_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("upar", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            upar_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("upar", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y * upar_zed_x_y
 
         elif quantity == "dyphi-P":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            P_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            P_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y * P_zed_x_y
 
         elif quantity == "dyphi-chi":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            chi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("chi", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            chi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("chi", time_idx=time_idx, species_idx=species_idx, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y * chi_zed_x_y
 
         elif quantity == "dyphi-dyPprp":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            dyPprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            dyPprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y * dyPprp_zed_x_y
 
         elif quantity == "dxphi-dyPprp":
-            dxphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, kx_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            dyPprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dxphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, kx_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            dyPprp_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("pressure_perp", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dxphi_zed_x_y * dyPprp_zed_x_y
 
         elif quantity == "dyphi-dyphi":
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dyphi_zed_x_y**2
 
         elif quantity == "kx-avg":
-            phi_zed_kx_ky, zed, kx, ky, time_eval = run.get_quantity_zed_kx_ky("phi", time_idx=time_idx, species_idx=species_idx, kxmin_filter=kxmin_filter)
+            phi_zed_kx_ky, zed, kx, ky, time_eval = run.get_quantity_zed_kx_ky("phi", time_idx=time_idx, species_idx=species_idx, kx_lowpass_cutoff=kx_lowpass_cutoff)
             kx_avg = np.sum( kx[None,:,None] * np.abs(phi_zed_kx_ky[:,:,1:])**2, axis=(1,2)) / np.sum( np.abs(phi_zed_kx_ky[:,:,1:])**2, axis=(1,2))
 
             f_zed_x_y = kx_avg[:,None,None]
 
         elif quantity == "dxphi-dyphi":
-            dxphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, kx_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
-            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            dxphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, kx_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
+            dyphi_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y("phi", time_idx=time_idx, species_idx=species_idx, ky_order=1, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             f_zed_x_y = dxphi_zed_x_y * dyphi_zed_x_y
 
         else:
-            f_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, nx=nx, ny=ny, kxmin_filter=kxmin_filter)
+            f_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, nx=nx, ny=ny, kx_lowpass_cutoff=kx_lowpass_cutoff)
             x_der_taken = True
             y_der_taken = True
 
@@ -550,17 +547,7 @@ def plot_quantity_zed_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, 
     if logarithmic:
         Z = np.abs(Z)
 
-    if vmax is None:
-        vmax = Z.max()
-    if vmax == "last":
-        vmax = np.abs(Z[:,-1]).max()
-    if vmin == "symm":
-        vmin = -vmax
-    elif vmin is None:
-        if logarithmic:
-            vmin = 1e-2*vmax
-        else:
-            vmin = Z.min()
+    vmin, vmax = resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax=Z.max())
 
     if logarithmic:
         im = ax.pcolormesh(X, Y, Z, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
@@ -577,7 +564,46 @@ def plot_quantity_zed_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, 
     return fig, ax, im
 
 
-def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmin=None, vmax=None, logarithmic=False, remove_zonal=False, only_zonal=False, avg_norm=None, nx=None, ny=None, species_idx=0, cmap='inferno', kx_order=0, ky_order=0, kxmin_filter=1000, kxmax_filter=0, polar_plot=False, idx_x_shift=None, mult_zed=None, mult_fac=1, xlim_box=None):
+def get_quantity_x_zed(run, quantity, time_idx=-1, species_idx=0, remove_zonal=False, only_zonal=False, nx=None, ny=None, kx_order=0, ky_order=0, kx_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, mult_zed=None, mult_fac=1, avg_norm=None, idx_x_shift=None, xlim_box=None):
+    """No-plot equivalent of plot_quantity_x_zed's string-`quantity`
+    computation branch (the array-input branch below is a plotting-only
+    convenience for re-displaying an already-computed (zed, x) array, and
+    isn't extracted). Returns (f_zed_x, x, zed, time_eval) -- the same
+    values plot_quantity_x_zed computes before building its figure.
+    Extracted so this can be called from inside a @cached function
+    (stella_diagnostics.scan.quantities_x_scan), which must not call
+    plotting code. plot_quantity_x_zed's own body is left untouched."""
+    f_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity, time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kx_order=kx_order, ky_order=ky_order, kx_lowpass_cutoff=kx_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff)
+
+    zed_weight = run.get_zed_weight(mult_zed, zed)
+    f_zed_x_y = f_zed_x_y * zed_weight[:, None, None] * mult_fac
+
+    if idx_x_shift and idx_x_shift > 0 and idx_x_shift < len(x) - 1:
+        idx_sort = np.concatenate((range(idx_x_shift, len(x)), range(idx_x_shift)))
+        f_zed_x_y = f_zed_x_y[:, idx_sort, :]
+
+    if only_zonal:
+        avg_norm = "zonal"
+
+    if avg_norm == "abs":
+        f_zed_x = np.sum(np.abs(f_zed_x_y), axis=2)
+    elif avg_norm == 2:
+        f_zed_x = np.sqrt(np.sum(f_zed_x_y ** 2, axis=2))
+    elif avg_norm == "center":
+        f_zed_x = f_zed_x_y[:, :, 0]
+    else:
+        f_zed_x = np.sum(f_zed_x_y, axis=2)
+
+    if xlim_box is not None:
+        idx_min = nearest_index(x - xlim_box[0])
+        idx_max = nearest_index(x - xlim_box[1])
+        x = x[idx_min:idx_max]
+        f_zed_x = f_zed_x[:, idx_min:idx_max]
+
+    return f_zed_x, x, zed, time_eval
+
+
+def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmin=None, vmax=None, logarithmic=False, remove_zonal=False, only_zonal=False, avg_norm=None, nx=None, ny=None, species_idx=0, cmap='inferno', kx_order=0, ky_order=0, kx_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, polar_plot=False, idx_x_shift=None, mult_zed=None, mult_fac=1, xlim_box=None):
 
     # Figure
     if ax is None:
@@ -591,7 +617,7 @@ def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmi
 
     # Load data
     if isinstance(quantity, str):
-        f_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity, time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kx_order=kx_order, ky_order=ky_order, kxmin_filter=kxmin_filter, kxmax_filter=kxmax_filter)
+        f_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity, time_idx=time_idx, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, nx=nx, ny=ny, kx_order=kx_order, ky_order=ky_order, kx_lowpass_cutoff=kx_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff)
 
         # zed weight and multiplication factor
         zed_weight = run.get_zed_weight(mult_zed, zed)
@@ -623,7 +649,7 @@ def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmi
             x = x[idx_min:idx_max]
             f_zed_x = f_zed_x[:,idx_min:idx_max]
 
-        fig.suptitle(r"$t v_T/a=%.2f$" % (time_eval))
+        fig.suptitle(r"$t %s/a=%.2f$" % (get_vt_label(run.ncdata), time_eval if np.ndim(time_eval) == 0 else time_eval[-1]))
 
 
     else:
@@ -637,17 +663,7 @@ def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmi
     X, Y = np.meshgrid(x, zed)
     Z = f_zed_x
 
-    if vmax is None:
-        vmax = np.abs(Z).max()
-    if vmax == "last":
-        vmax = np.abs(Z[:,-1]).max()
-    if vmin == "symm":
-        vmin = -vmax
-    elif vmin is None:
-        if logarithmic:
-            vmin = 1e-2*vmax
-        else:
-            vmin = Z.min()
+    vmin, vmax = resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax=np.abs(Z).max())
 
     if logarithmic:
         im = ax.pcolormesh(Y, X, np.abs(Z), norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)#, rasterized=True)
@@ -661,7 +677,7 @@ def plot_quantity_x_zed(run, quantity="phi", fig=None, ax=None, time_idx=-1, vmi
     if not polar_plot:
         ax.set_ylim(ymin=x[0],ymax=x[-1])
         ax.set_xlabel(r"$\theta$")
-        ax.set_ylabel(r"$x/\rho$")
+        ax.set_ylabel(r"$x/%s$" % get_rho_label(run.ncdata))
 
     ax.set_xticks([-np.pi,-np.pi/2,0,np.pi/2,np.pi])
     ax.set_xticklabels([r"$-\pi$", r"$-\pi/2$", r"$0$", r"$\pi/2$", r"$\pi$"])

@@ -97,20 +97,11 @@ def read_avg_kperp_rhoi(run, exclude_zonal=True, only_zonal=False, time_idx_jump
     phi2_vs_t = np.abs( run.ncdata.variables['phi_vs_t'][::time_idx_jump,0,:,:,:,0] + 1j*run.ncdata.variables['phi_vs_t'][::time_idx_jump,0,:,:,:,1])**2
     time      = run.ncdata.variables['t'][::time_idx_jump] 
     Ntime     = len(time)
-    zed       = run.ncdata.variables['zed'][:]
     # kperp2(zed, alpha, kx, ky)
     kperp2    = run.ncdata.variables['kperp2'][:,0,:,:]
 
-#        ky        = run.ncdata.variables['ky'] 
-#        kx        = run.ncdata.variables['kx'] 
-
     dl_over_B_avg = run.dl_over_B_avg()
 
-    shat   = run.ncdata.variables['shat'].getValue()
-#        gds2   = np.asarray(run.ncdata.variables['gds2'][:] )
-#        gds21  = np.asarray(run.ncdata.variables['gds21'][:])
-#        gds22  = np.asarray(run.ncdata.variables['gds22'][:])
-  
     if exclude_zonal:
         phi2_vs_t[:,:,:,0] = 0
     if only_zonal:
@@ -119,17 +110,6 @@ def read_avg_kperp_rhoi(run, exclude_zonal=True, only_zonal=False, time_idx_jump
     # Avoid division by zero
     phi2_vs_t[:,:,0,0] = 0
     kperp2[:,0,0] = 1e16
-
-#        # Get kperp along tube for all mode numbers
-#        kperp_rhoi = np.zeros(shape=(len(zed),len(kx),len(ky))) 
-#        for i_zed in range(len(zed)):
-#            print("zed  index %i/%i" % (i_zed+1, len(zed)), end="\r")
-#            for i_kx in range(len(kx)):
-#                for i_ky in range(len(ky)):
-#                    if i_ky == 0 and (exclude_zonal or i_kx == 0):
-#                        kperp_rhoi[i_zed, i_kx, i_ky] = np.inf
-#                    else:
-#                        kperp_rhoi[i_zed, i_kx, i_ky] = np.sqrt( gds22[i_zed]/(shat*shat)*kx[i_kx]**2 + gds21[i_zed]/shat*kx[i_kx]*ky[i_ky] + gds2[i_zed]*ky[i_ky]**2 )
 
     # For all times, obtain energy-averaged kperp
     kperp2_O        = np.zeros(Ntime)

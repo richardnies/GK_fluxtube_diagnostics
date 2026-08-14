@@ -5,7 +5,7 @@ Usage:
 
 <config.py> defines `dirnames` (2D list: dirnames[row][col], required),
 `row_titles`, `col_titles` (required), and optionally `filename`, `code`,
-`dt_avg`, `kx_min`, `kx_max`, `nozonal`, `zonal`, `sharex`, `figname`.
+`time_avg`, `kx_min`, `kx_max`, `nozonal`, `zonal`, `sharex`, `figname`.
 Empty-string entries in `dirnames` are placeholders for missing
 row/col combinations (skipped, matching the original scan_type blocks
 which used "" for cells that don't correspond to a real run).
@@ -30,7 +30,7 @@ nozonal = getattr(config, "nozonal", False)
 zonal = getattr(config, "zonal", True)
 kx_min = getattr(config, "kx_min", 0)
 kx_max = getattr(config, "kx_max", 0.2)
-dt_avg = getattr(config, "dt_avg", 300)
+time_avg = getattr(config, "time_avg", 300)
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
 
@@ -57,7 +57,7 @@ for i_row in range(Nrows):
             run = StellaRun(dirname + "/" + filename, code=code)
             _, _, im = run.plot_contour_gvmu_vpa(
                 time_idx=-1, logarithmic=True, vmin="symm", nozonal=nozonal, zonal=zonal,
-                fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, dt_avg=dt_avg,
+                fig=fig, ax=ax, kx_min=kx_min, kx_max=kx_max, time_avg=time_avg,
             )
             plt.colorbar(im, ax=ax)
         except Exception as e:
@@ -85,6 +85,6 @@ if figname is None:
         figname += "_nozonal"
     if zonal:
         figname += "_zonal"
-    figname += "_dtavg-%i" % dt_avg if kx_min is None and kx_max is None else "_dtavg-%i_kxmin-%.2f_kxmax-%.2f" % (dt_avg, kx_min, kx_max)
+    figname += "_dtavg-%i" % time_avg if kx_min is None and kx_max is None else "_dtavg-%i_kxmin-%.2f_kxmax-%.2f" % (time_avg, kx_min, kx_max)
     figname += ".pdf"
 fig.savefig(figname)

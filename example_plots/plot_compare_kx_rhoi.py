@@ -6,7 +6,16 @@ Usage:
 
 <config.py> defines `base_dirs`, `tprim_vals`, `zeta_center_vals`
 (required) and optionally `filename`, `code`, `markers`, `ls_base_dirs`,
-`colors_tube`, `take_last`, `time_avg`, `figname_time`, `figname_scaling`.
+`colors_tube`, `take_last`, `time_avg`, `time_val_avg`, `figname_time`,
+`figname_scaling`.
+
+`time_avg`/`time_val_avg`: trailing (time_val_avg=None, default) or
+centered (time_val_avg=X) window WIDTH -- same convention as every other
+quantity-time-averaging function in this codebase. NOTE: before a fix to
+stella_diagnostics.scan.kx_rhoi_scan.get_time_avg_kx_rhoi, `time_avg` here
+meant an absolute threshold (average everything after t=time_avg), not a
+window width -- a real, deliberate behavior change, not a rename; see that
+function's docstring.
 """
 import sys
 
@@ -32,6 +41,7 @@ ls_base_dirs = getattr(config, "ls_base_dirs", ["-", "--"])
 colors_tube = getattr(config, "colors_tube", ["r", "g"])
 take_last = getattr(config, "take_last", False)
 time_avg = getattr(config, "time_avg", 350)
+time_val_avg = getattr(config, "time_val_avg", None)
 
 colors = sns.color_palette("rocket", len(config.tprim_vals))
 
@@ -52,7 +62,7 @@ kx_rhoi_O_avg = np.zeros(len(dirnames))
 plt.figure(figsize=(5, 3))
 for i_dir, dirname in enumerate(dirnames):
     run = StellaRun(dirname + "/" + filename, code=code)
-    time, kx_rhoi_O, avg = get_time_avg_kx_rhoi(run, time_avg=time_avg, take_last=take_last)
+    time, kx_rhoi_O, avg = get_time_avg_kx_rhoi(run, time_avg=time_avg, take_last=take_last, time_val_avg=time_val_avg)
     kx_rhoi_O_avg[i_dir] = avg
     plt.plot(time, kx_rhoi_O, label=labels[i_dir], ls=ls_list[i_dir], c=color_list[i_dir])
 
@@ -63,7 +73,7 @@ plt.ylabel(r"$\langle (k_x \rho_i)^{-1} \rangle^{-1}$")
 plt.xlim(xmin=0)
 plt.ylim(ymin=0)
 plt.tight_layout()
-plt.savefig(getattr(config, "figname_time", "fig_kxrhoi_outer_time_QA.eps"))
+plt.savefig(getattr(config, "figname_time", "fig_kxrhoi_outer_time_QA.pdf"))
 
 plt.close()
 plt.figure(figsize=(5, 3))
@@ -76,4 +86,4 @@ plt.legend()
 plt.xlabel(r"$a/L_T$")
 plt.ylabel(r"$\langle (k_x \rho_i)^{-1} \rangle^{-1}$")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname_scaling", "fig_kxrhoi_outer_QA.eps"))
+plt.savefig(getattr(config, "figname_scaling", "fig_kxrhoi_outer_QA.pdf"))

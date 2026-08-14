@@ -1,29 +1,33 @@
 """(1-Gamma0)|phi_Z(kx)|^2 spectrum integration, for the E_zonal-vs-q*kappa^2
 scaling comparison.
 
-Extracted from example_plots/plot_phiZ_TS_qkappa2.py -- reads precomputed
-"<prefix>_kx_zonal.dat" / "<prefix>_kx_zonal_stddev.dat" files (an external
-cache this script only ever consumed, never generated) and integrates them
-over a kx window. Not wrapped in stella_diagnostics.io.cache since it
-doesn't take a StellaRun (there's no netCDF read here at all, just two flat
-files) and the integration itself is cheap.
+Used by example_plots/plot_phiZ_TS_qkappa2.py. Originally read precomputed
+"<prefix>_kx_zonal.dat"/"_kx_zonal_stddev.dat" files -- these are the same
+zonal (kx>0, ky=0) phi^2(kx) spectrum that
+stella_diagnostics.scan.spectrum_scan.get_phi_k_spectrum(plot_kx=True,
+only_zonal=True) computes, so this now calls that directly instead of
+reading hand-rolled files (which nothing in this codebase ever wrote under
+that exact name -- a pre-existing naming mismatch with
+plot_phi_k_spectrum's own "_Ephi_kx_zonal.dat" convention, not a real
+separate external dependency).
 """
 
 import numpy as np
 
+from stella_diagnostics.scan.spectrum_scan import get_phi_k_spectrum
 
-def get_Ezonal_from_kx_zonal_file(filename_prefix, kxmin=0.3, kxmax=1e4, fac_rescale=1.0):
-    """(Ezonal, Ezonal_stddev): the (1-Gamma0)|phi_Z(kx)|^2 spectrum in
-    '<filename_prefix>_kx_zonal.dat' (and its _stddev sibling), integrated
-    over kx in [kxmin, kxmax] and scaled by fac_rescale.
+
+def get_Ezonal(run, kxmin=0.3, kxmax=1e4, fac_rescale=1.0, time_idx=-1, time_avg=None):
+    """(Ezonal, Ezonal_stddev): the (1-Gamma0)|phi_Z(kx)|^2 spectrum for
+    one run, integrated over kx in [kxmin, kxmax] and scaled by
+    fac_rescale.
     """
-    phi2k, kx = np.loadtxt(filename_prefix + "_kx_zonal.dat")
-    phi2k_stddev, kx = np.loadtxt(filename_prefix + "_kx_zonal_stddev.dat")
+    kx, phi2_k, phi2_k_stddev = get_phi_k_spectrum(run, plot_kx=True, only_zonal=True, time_idx=time_idx, time_avg=time_avg)
 
     idx_min = np.argmin(np.abs(kx - kxmin))
     idx_max = np.argmin(np.abs(kx - kxmax))
 
-    Ezonal = np.trapz(y=phi2k[idx_min:idx_max], x=kx[idx_min:idx_max]) * fac_rescale
-    Ezonal_stddev = np.trapz(y=phi2k_stddev[idx_min:idx_max], x=kx[idx_min:idx_max]) * fac_rescale
+    Ezonal = np.trapz(y=phi2_k[idx_min:idx_max], x=kx[idx_min:idx_max]) * fac_rescale
+    Ezonal_stddev = np.trapz(y=phi2_k_stddev[idx_min:idx_max], x=kx[idx_min:idx_max]) * fac_rescale
 
     return Ezonal, Ezonal_stddev

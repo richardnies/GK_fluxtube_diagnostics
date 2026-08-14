@@ -21,12 +21,19 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
+from stella_diagnostics.io.codes import get_vt_label
+from stella_diagnostics.plotting.mpl_helpers import resolve_vmin_vmax
 
 
 def read_g_vs_zed(run, time_idx=-1, species_idx=0, vpa_index=None, normalise=True):
 
-    # gzvs(t, species, vpa, zed, tube) ;
-    gzvs = run.ncdata.variables['gzvs'][time_idx,species_idx,:,:,0]
+    # gzvs(t, species, vpa, zed, tube) -- older stella netCDF variable
+    # name; some stella versions write g2_vs_zvpas instead (same
+    # shape/dim order).
+    try:
+        gzvs = run.ncdata.variables['gzvs'][time_idx,species_idx,:,:,0]
+    except KeyError:
+        gzvs = run.ncdata.variables['g2_vs_zvpas'][time_idx,species_idx,:,:,0]
 
     # vpa?
     vpa = run.ncdata.variables['vpa']
@@ -53,13 +60,28 @@ def read_g_vs_zed(run, time_idx=-1, species_idx=0, vpa_index=None, normalise=Tru
 def get_gvpa_gmu(run, time_idx=-1, species_idx=0, remove_zonal=False, only_zonal=False):
 
     if run.code == "stella":
-        # gvmus(t, species, mu, vpa)
+        # gvmus(t, species, mu, vpa) -- older stella netCDF variable name
+        # (gvmus_Z/gvmus_NZ for the zonal-only/zonal-removed variants);
+        # some stella versions write g2_vs_vpamus/g2nozonal_vs_vpamus
+        # instead, with no direct zonal-only equivalent -- derive it as
+        # total minus nozonal (same pattern as plot_contour_gvmu_vpa).
         if only_zonal:
-            gvmus  = run.ncdata.variables['gvmus_Z'][time_idx,species_idx]
+            try:
+                gvmus  = run.ncdata.variables['gvmus_Z'][time_idx,species_idx]
+            except KeyError:
+                gvmus_tot = run.ncdata.variables['g2_vs_vpamus'][time_idx,species_idx]
+                gvmus_NZ  = run.ncdata.variables['g2nozonal_vs_vpamus'][time_idx,species_idx]
+                gvmus = gvmus_tot - gvmus_NZ
         elif remove_zonal:
-            gvmus  = run.ncdata.variables['gvmus_NZ'][time_idx,species_idx]
+            try:
+                gvmus  = run.ncdata.variables['gvmus_NZ'][time_idx,species_idx]
+            except KeyError:
+                gvmus  = run.ncdata.variables['g2nozonal_vs_vpamus'][time_idx,species_idx]
         else:
-            gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+            try:
+                gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+            except KeyError:
+                gvmus  = run.ncdata.variables['g2_vs_vpamus'][time_idx,species_idx]
 
         vpa    = run.ncdata.variables['vpa'][:]
         mu     = run.ncdata.variables['mu'][:]
@@ -109,8 +131,13 @@ def get_gvpa_gmu(run, time_idx=-1, species_idx=0, remove_zonal=False, only_zonal
 
 def get_Evpa_Emu(run, time_idx=-1, species_idx=0):
 
-    # gvmus(t, species, mu, vpa)
-    gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+    # gvmus(t, species, mu, vpa) -- older stella netCDF variable name;
+    # some stella versions write g2_vs_vpamus instead (same shape/dim
+    # order).
+    try:
+        gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+    except KeyError:
+        gvmus  = run.ncdata.variables['g2_vs_vpamus'][time_idx,species_idx]
     vpa    = run.ncdata.variables['vpa'][:]
     mu     = run.ncdata.variables['mu'][:]
     time   = run.ncdata.variables['t'][time_idx]
@@ -128,8 +155,13 @@ def get_Evpa_Emu(run, time_idx=-1, species_idx=0):
 
 def get_n_T_vpa_mu(run, time_idx=-1, species_idx=0):
 
-    # gvmus(t, species, mu, vpa)
-    gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+    # gvmus(t, species, mu, vpa) -- older stella netCDF variable name;
+    # some stella versions write g2_vs_vpamus instead (same shape/dim
+    # order).
+    try:
+        gvmus  = run.ncdata.variables['gvmus'][time_idx,species_idx]
+    except KeyError:
+        gvmus  = run.ncdata.variables['g2_vs_vpamus'][time_idx,species_idx]
     vpa    = run.ncdata.variables['vpa'][:]
     mu     = run.ncdata.variables['mu'][:]
     time   = run.ncdata.variables['t'][time_idx]
@@ -148,15 +180,19 @@ def get_n_T_vpa_mu(run, time_idx=-1, species_idx=0):
     return nmu, nvpa, Tmu, Tvpa, mu, vpa, time
 
 
-def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=None, logarithmic=False, cmap='inferno', plot_diff=False, zonal=False, nozonal=False, species_idx=0, kx_min=None, kx_max=None, dt_avg=None):
-    
-    if dt_avg is None:
+def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=None, logarithmic=False, cmap='inferno', plot_diff=False, zonal=False, nozonal=False, species_idx=0, kx_min=None, kx_max=None, time_avg=None):
+    # time_avg: trailing-window width ending at time_idx's own time
+    # (time_avg=None -> single snapshot at time_idx). Same trailing-window
+    # convention as stella_diagnostics.scan.zonal_flow_scan/rh_flux_scan
+    # (time_val_avg=None branch), just evaluated at this call's own
+    # time_idx instead of the run's last sample.
+    if time_avg is None:
         time_idx_eval = time_idx
     else:
         time_all = run.get_time_array()
         time_eval = time_all[time_idx]
-        time_min = time_eval-dt_avg#/2
-        time_max = time_eval#+dt_avg/2
+        time_min = time_eval-time_avg#/2
+        time_max = time_eval#+time_avg/2
         time_idx_min = run.get_time_idx(time_min)
         time_idx_max = run.get_time_idx(time_max)
         time_idx_eval = np.arange(time_idx_min, time_idx_max)
@@ -199,7 +235,7 @@ def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=N
            gkxvmus     = run.ncdata.variables['g2_vs_kxvpamus'][time_idx_eval,species_idx]
 
         # Sum over kx's within desired range 
-        if dt_avg is None:
+        if time_avg is None:
             gvmus = np.sum(gkxvmus[  :,:, ( (np.abs(kx) >= kx_min) & (np.abs(kx) <= kx_max) )], axis=2)
         else:
             gvmus = np.sum(gkxvmus[:,:,:, ( (np.abs(kx) >= kx_min) & (np.abs(kx) <= kx_max) )], axis=3)
@@ -208,11 +244,14 @@ def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=N
     mu     = run.ncdata.variables['mu']
     time   = run.ncdata.variables['t'][time_idx]
 
-    if dt_avg is not None:
+    if time_avg is not None:
         gvmus = np.sum(gvmus*dt_vals[:,None,None], axis=0)/np.sum(dt_vals)
 
     if plot_diff:
-        gvmus_init = run.ncdata.variables['gvmus'][0,species_idx]
+        try:
+            gvmus_init = run.ncdata.variables['gvmus'][0,species_idx]
+        except KeyError:
+            gvmus_init = run.ncdata.variables['g2_vs_vpamus'][0,species_idx]
         gvmus = gvmus - gvmus_init
 
     X, Y = np.meshgrid(vpa, mu)
@@ -224,34 +263,25 @@ def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=N
     if logarithmic:
         Z = np.abs(Z)
 
-    if vmin is None:
-        vmin = Z.min()
-    if vmax is None:
-        vmax = Z.max()
-
-    if vmin=='symm' or vmax=='symm':
-        vmax = np.abs(np.nanmax(Z))
-        if not logarithmic:
-            vmin = -vmax
-        else:
-            if Z.min() < 1e-15:
-                Z = Z+1e-14
-                vmax = vmax+1e-14
-            vmin = vmax/1e4
+    # Was hand-rolled here (a Z.min()<1e-15 guard + a vmax/1e4 log floor)
+    # duplicated with a different, inconsistent floor (1e-2*vmax) in
+    # plot_contour_gzvs below and in every other 2D contour plot in the
+    # package -- now shares the one convention in mpl_helpers.
+    vmin, vmax = resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax=Z.max())
 
     if logarithmic:
         try:
-            im = ax.pcolormesh(X, Y, np.abs(Z), norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
-            #im = ax.contourf(X, Y, np.abs(Z), norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap, levels=100)
+            im = ax.pcolormesh(X, Y, Z, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
+            #im = ax.contourf(X, Y, Z, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap, levels=100)
         except:
             logarithmic = False
 
     if not logarithmic:
         im = ax.pcolormesh(X, Y, Z, vmin=vmin, vmax=vmax, shading='auto', cmap=cmap)
 
-    ax.set_xlabel(r"$v_\parallel/v_T$")
+    ax.set_xlabel(r"$v_\parallel/%s$" % get_vt_label(run.ncdata))
     ax.set_ylabel(r"$\mu B_\mathrm{max}/T$")
-    fig.suptitle(r"$t v_T/a = %.2f$" % (time))
+    fig.suptitle(r"$t %s/a = %.2f$" % (get_vt_label(run.ncdata), time))
 
     return fig, ax, im
 
@@ -287,35 +317,26 @@ def plot_contour_gzvs(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=None,
     if fig is None and ax is None:
         fig, ax = plt.subplots(nrows=1,ncols=1, figsize=(12,9))
 
-    if vmin=='symm' or vmax=='symm':
-        vmax = np.abs(Z.max())
-        if not logarithmic:
-            vmin = -vmax
-        else:
-            if Z.min() < 1e-15:
-                Z = Z+1e-14
-                vmax = vmax+1e-14
-            vmin = vmax/1e4
+    if logarithmic:
+        Z = np.abs(Z)
 
-
-    if vmin is None:
-        vmin = Z.min()
-    if vmax is None:
-        vmax = Z.max()
+    # See plot_contour_gvmus above -- same shared floor now, not a
+    # separately hand-rolled (and inconsistent) one.
+    vmin, vmax = resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax=Z.max())
 
     if logarithmic:
-        im = ax.pcolormesh(X, Y, np.abs(Z), norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
+        im = ax.pcolormesh(X, Y, Z, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
     else:
         im = ax.pcolormesh(X, Y, Z, vmin=vmin, vmax=vmax, shading='auto', cmap=cmap)
 
-    ax.set_xlabel(r"$v_\parallel/v_T$")
+    ax.set_xlabel(r"$v_\parallel/%s$" % get_vt_label(run.ncdata))
     ax.set_ylabel(r"$\zeta$")
-    ax.set_title(r"$t v_T/a = %.2f$" % (time))
+    ax.set_title(r"$t %s/a = %.2f$" % (get_vt_label(run.ncdata), time))
 
     return fig, ax, im
 
 
-def evolve_markers_2D(run, t_min=0, t_max=np.inf, x0=[0], y0=[0], only_zonal_vEx=False, only_zonal_vEy=False, remove_zonal=False, zed_val=0, nx=None, ny=None, kxmax_filter=-1):
+def evolve_markers_2D(run, t_min=0, t_max=np.inf, x0=[0], y0=[0], only_zonal_vEx=False, only_zonal_vEy=False, remove_zonal=False, zed_val=0, nx=None, ny=None, kx_highpass_cutoff=-1):
 
     # Time interval
     time_all = run.get_time_array()
@@ -335,9 +356,9 @@ def evolve_markers_2D(run, t_min=0, t_max=np.inf, x0=[0], y0=[0], only_zonal_vEx
         print("Marker evolution: time step %i/%i..." % (1+i_t, len(time_eval)), end="\r")
 
         # Evaluate velocity field
-        vEx_x_y, x, y, _ = run.get_quantity_x_y(quantity="phi", zed_val=zed_val, time_idx=time_idx_min+i_t, remove_zonal=remove_zonal, only_zonal=only_zonal_vEx, ky_order=1, nx=nx, ny=ny, kxmax_filter=kxmax_filter)
+        vEx_x_y, x, y, _ = run.get_quantity_x_y(quantity="phi", zed_val=zed_val, time_idx=time_idx_min+i_t, remove_zonal=remove_zonal, only_zonal=only_zonal_vEx, ky_order=1, nx=nx, ny=ny, kx_highpass_cutoff=kx_highpass_cutoff)
         vEx_x_y = -vEx_x_y
-        vEy_x_y, x, y, _ = run.get_quantity_x_y(quantity="phi", zed_val=zed_val, time_idx=time_idx_min+i_t, remove_zonal=remove_zonal, only_zonal=only_zonal_vEy, kx_order=1, nx=nx, ny=ny, kxmax_filter=kxmax_filter)
+        vEy_x_y, x, y, _ = run.get_quantity_x_y(quantity="phi", zed_val=zed_val, time_idx=time_idx_min+i_t, remove_zonal=remove_zonal, only_zonal=only_zonal_vEy, kx_order=1, nx=nx, ny=ny, kx_highpass_cutoff=kx_highpass_cutoff)
 
         # Shift for easier periodicity
         x = x-x[0]

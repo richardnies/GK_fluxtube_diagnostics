@@ -18,5 +18,5 @@ dirs = {
     "dir_q_2": "2026-06-26_scan_qinp-2.8_shat-0.8_rmaj-1.000_rhoc-0.18_fprim-2.2_vnew-0/",
 }
 
-delta_t_avg = 500
+time_avg = 500
 load_from_file = True

@@ -21,10 +21,11 @@ def test_plot_qflx_and_energy_vs_time_all_runs_plotted(synthetic_scan_dirs):
     fig, ax = plot_qflx_and_energy_vs_time(
         synthetic_scan_dirs, labels=["a", "b", "c"], filename="CBC"
     )
-    # 3 lines per run: Qflx, E_phi, E_upar
+    # 3 lines per run (1 species each in the synthetic fixture): Qflx, E_phi, E_upar
     assert len(ax.get_lines()) == 3 * len(synthetic_scan_dirs)
     legend_labels = [t.get_text() for t in ax.get_legend().get_texts()]
-    assert "a" in legend_labels
+    # run label "a" is a prefix (species name is always appended, e.g. "a Species 0")
+    assert any(l.startswith("a") for l in legend_labels)
     assert any("E_{\\varphi}" in l for l in legend_labels)
     plt.close(fig)
 

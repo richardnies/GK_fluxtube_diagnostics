@@ -54,4 +54,4 @@ for i_base_dir, base_dir in enumerate(config.base_dirs):
 
 fig.suptitle(r"$|\phi|(\zeta, t)$ for $a/L_T =$ %i" % (config.tprim_val))
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%i.png" % (config.tprim_val))
+plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%i.pdf" % (config.tprim_val))

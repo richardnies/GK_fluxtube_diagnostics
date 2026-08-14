@@ -1,4 +1,9 @@
-"""Rosenbluth-Hinton (RH) residual zonal-flow test: computes and plots the RH inertia/flux/energy quantities used to benchmark zonal-flow damping against theory."""
+"""Rosenbluth-Hinton (RH) residual zonal-flow test: computes and plots the RH inertia/flux/energy quantities used to benchmark zonal-flow damping against theory.
+
+``species_idx`` throughout this module is dual-typed: either an integer
+index for one species, or the literal string ``"sum"`` (the default) to
+sum/include all species. Not indicated by the name alone -- flagged here
+since it isn't obvious from any single call site."""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +18,7 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
-from stella_diagnostics.io.codes import get_nspecies
+from stella_diagnostics.io.codes import get_nspecies, get_rho_label, get_vt_label
 
 
 def get_RH_inertia(run, species_idx="sum", kx_max=1e5, idxs_kx=None):
@@ -319,7 +324,7 @@ def plot_E_RH(run, fig=None, ax=None, time_min=0, time_max=1e10, idxs_kx=None, k
             continue
 
         ax.plot(time, E_RH_t_kx[:,i_kx], 
-                label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx], lw=2)
+                label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx], lw=2)
         ax.plot(time, E_Z_t_kx[:,i_kx], 
                                                        c=colors[i_kx], ls='--')
 
@@ -328,7 +333,7 @@ def plot_E_RH(run, fig=None, ax=None, time_min=0, time_max=1e10, idxs_kx=None, k
 
     ax.set_ylabel(r"$E_{RH}$ (solid), $E^Z_\varphi$ (dashed)")
     #axs[1].set_ylabel(r"$|E_{RH}-E^Z_\varphi|/E_{RH}$")
-    ax.set_xlabel(r"$t v_{T}/a$")
+    ax.set_xlabel(r"$t %s/a$" % get_vt_label(run.ncdata))
 
     #for ax in axs:
     ax.grid(True)
@@ -343,11 +348,12 @@ def plot_RH_phi_I(run, fig=None, axs=None, time_min=0, time_max=1e10, idxs_kx=No
 
     RH_phi_I_t_kx, time, kx_vals = run.get_RH_phi_I_t_kx(time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx)
 
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- idxs_kx is read here before the `if idxs_kx is
-    # None: idxs_kx = np.arange(...)` line further down assigns it a
-    # value, so calling this with the documented default (idxs_kx=None)
-    # always raises TypeError.
+    # idxs_kx must be resolved before it's used (by len()) just below --
+    # previously read before this None-check ran, so calling this with
+    # the documented default (idxs_kx=None) always raised TypeError.
+    if idxs_kx is None:
+        idxs_kx = np.arange(len(kx_vals))
+
     if colors is None:
         if len(idxs_kx) > 1:
             colors = sns.color_palette("coolwarm", len(kx_vals))
@@ -363,10 +369,6 @@ def plot_RH_phi_I(run, fig=None, axs=None, time_min=0, time_max=1e10, idxs_kx=No
     RH_inertia_zed_kx, zed, kx_vals = run.get_RH_inertia(species_idx="sum", kx_max=kx_max, idxs_kx=idxs_kx)
 
     dl_over_B_avg = run.dl_over_B_avg()
-
-    # Evaluate phiZ
-    if idxs_kx is None:
-        idxs_kx = np.arange(len(kx_vals))
 
     time_idx_min = run.get_time_idx(time_min)
     time_idx_max = run.get_time_idx(time_max)
@@ -385,22 +387,22 @@ def plot_RH_phi_I(run, fig=None, axs=None, time_min=0, time_max=1e10, idxs_kx=No
     for i_kx, kx in enumerate(kx_vals):
 
         axs[0].plot(time, np.real(RH_phi_I_t_kx[:,i_kx]), 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         axs[0].plot(time, np.imag(RH_phi_I_t_kx[:,i_kx]), 
                     ls="--", c=colors[i_kx])
 
         axs[1].plot(time, np.real(phiZ_IRH_t_kx[:,i_kx]), 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors_sim[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors_sim[i_kx])
         axs[1].plot(time, np.imag(phiZ_IRH_t_kx[:,i_kx]), 
                     ls="--", c=colors_sim[i_kx])
 
         axs[2].plot(time, np.abs(RH_phi_I_t_kx[:,i_kx]), 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         axs[2].plot(time, np.abs(phiZ_IRH_t_kx[:,i_kx]), 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors_sim[i_kx], alpha=0.5)
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors_sim[i_kx], alpha=0.5)
 
         #axs[2].plot(time, np.real(rel_diff_t_kx[:,i_kx]), 
-        #            label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+        #            label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         #axs[2].plot(time, np.imag(rel_diff_t_kx[:,i_kx]), 
         #            ls="--", c=colors[i_kx])
 
@@ -408,7 +410,7 @@ def plot_RH_phi_I(run, fig=None, axs=None, time_min=0, time_max=1e10, idxs_kx=No
     axs[1].set_ylabel(r"$\varphi I_{RH}$")
     axs[2].set_ylabel(r"Both")
     #axs[2].set_ylabel(r"Relative diff")
-    axs[2].set_xlabel(r"$t v_{T}/a$")
+    axs[2].set_xlabel(r"$t %s/a$" % get_vt_label(run.ncdata))
 
     for ax in axs:
         ax.grid(True)
@@ -429,22 +431,22 @@ def plot_RH_fluxes(run, fig=None, axs=None, time_min=0, time_max=1e10, species_i
     for i_kx, kx in enumerate(kx_vals):
 
         axs[0].plot(time, np.real(RH_fluxes_even_t_kx[:,i_kx]), 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         axs[0].plot(time, np.imag(RH_fluxes_even_t_kx[:,i_kx]), 
                     ls="--", c=colors[i_kx])
         axs[1].plot(time, np.real(RH_fluxes_odd_t_kx[:,i_kx]),  
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         axs[1].plot(time, np.imag(RH_fluxes_odd_t_kx[:,i_kx]), 
                     ls="--", c=colors[i_kx])
         axs[2].plot(time, np.real(RH_fluxes_even_t_kx[:,i_kx]+RH_fluxes_odd_t_kx[:,i_kx]),  
-                    label=r"$k_x \rho = %.3f$" % (kx), c=colors[i_kx])
+                    label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=colors[i_kx])
         axs[2].plot(time, np.imag(RH_fluxes_even_t_kx[:,i_kx]+RH_fluxes_odd_t_kx[:,i_kx]), 
                     ls="--", c=colors[i_kx])
 
     axs[0].set_ylabel(r"$F_\mathrm{RH}^+$")
     axs[1].set_ylabel(r"$F_\mathrm{RH}^-$")
     axs[2].set_ylabel(r"$F_\mathrm{RH}^+ + F_\mathrm{RH}^-$")
-    axs[2].set_xlabel(r"$t v_{T}/a$")
+    axs[2].set_xlabel(r"$t %s/a$" % get_vt_label(run.ncdata))
 
     for ax in axs:
         ax.grid(True)
@@ -452,9 +454,123 @@ def plot_RH_fluxes(run, fig=None, axs=None, time_min=0, time_max=1e10, species_i
     return fig, axs, RH_fluxes_even_t_kx, RH_fluxes_odd_t_kx, time, kx
 
 
-def plot_P_RH(run, fig=None, axs=None, time_min=0, time_max=1e10, species_idx="sum", passing_trapped="both", idxs_kx=None, kx_max=1e5, colors=None, fphi=1, fapar=1, fbpar=1, fcoll=1, D_hyper=None):
+def get_P_RH_breakdown(run, time_min=0, time_max=1e10, time_idx_skip=1, species_idx="sum", passing_trapped="both", idxs_kx=None, kx_max=1e5, fphi=1, fapar=1, fbpar=1, fcoll=1, D_hyper=None):
+    """No-plot equivalent of plot_P_RH's computation (same 4 isolated calls
+    into get_P_RH -- phi/apar/bpar/coll channels -- combined into totals,
+    plus the numerical dE_RH/dt cross-check and optional hyperdissipation
+    term). Extracted so this computation can be called from inside a
+    @cached function (stella_diagnostics.scan.rh_per_kx_scan), which must
+    not call plotting code. plot_P_RH's own body is left untouched (not
+    refactored to call this), to avoid touching an existing, working code
+    path as a side effect.
 
-    fig, axs = get_or_create_ax(fig, axs, nrows=3, ncols=1, figsize=(9,16))
+    Returns the same 11 data arrays + time + kx that plot_P_RH returns,
+    minus fig/axs: (P_RH_even_t_kx, P_RH_odd_t_kx, P_RH_phi_even_t_kx,
+    P_RH_phi_odd_t_kx, P_RH_apar_even_t_kx, P_RH_apar_odd_t_kx,
+    P_RH_bpar_even_t_kx, P_RH_bpar_odd_t_kx, P_RH_coll_even_t_kx,
+    P_RH_coll_odd_t_kx, P_RH_hyper_t_kx, time, kx).
+    """
+    P_RH_phi_even_t_kx, P_RH_phi_odd_t_kx, time, kx_vals = \
+            run.get_P_RH(species_idx=species_idx, passing_trapped=passing_trapped, time_min=time_min, time_max=time_max, time_idx_skip=time_idx_skip, kx_max=kx_max, idxs_kx=idxs_kx, fphi=fphi, fapar=0, fbpar=0, fcoll=0)
+    P_RH_phi_t_kx  = P_RH_phi_even_t_kx + P_RH_phi_odd_t_kx
+    P_RH_even_t_kx = np.copy(P_RH_phi_even_t_kx )
+    P_RH_odd_t_kx  = np.copy(P_RH_phi_odd_t_kx  )
+
+    if fapar != 0:
+        P_RH_apar_even_t_kx, P_RH_apar_odd_t_kx, time, kx_vals = \
+                run.get_P_RH(species_idx=species_idx, passing_trapped=passing_trapped, time_min=time_min, time_max=time_max, time_idx_skip=time_idx_skip, kx_max=kx_max, idxs_kx=idxs_kx, fphi=0, fapar=fapar, fbpar=0, fcoll=0)
+        P_RH_apar_t_kx  = P_RH_apar_even_t_kx + P_RH_apar_odd_t_kx
+        P_RH_even_t_kx += P_RH_apar_even_t_kx
+        P_RH_odd_t_kx  += P_RH_apar_odd_t_kx
+    else:
+        P_RH_apar_even_t_kx = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_apar_odd_t_kx  = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_apar_t_kx      = np.zeros_like(P_RH_phi_t_kx)
+
+    if fbpar != 0:
+        P_RH_bpar_even_t_kx, P_RH_bpar_odd_t_kx, time, kx_vals = \
+                run.get_P_RH(species_idx=species_idx, passing_trapped=passing_trapped, time_min=time_min, time_max=time_max, time_idx_skip=time_idx_skip, kx_max=kx_max, idxs_kx=idxs_kx, fphi=0, fapar=0, fbpar=fbpar, fcoll=0)
+        P_RH_bpar_t_kx  = P_RH_bpar_even_t_kx + P_RH_bpar_odd_t_kx
+        P_RH_even_t_kx += P_RH_bpar_even_t_kx
+        P_RH_odd_t_kx  += P_RH_bpar_odd_t_kx
+    else:
+        P_RH_bpar_even_t_kx = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_bpar_odd_t_kx  = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_bpar_t_kx      = np.zeros_like(P_RH_phi_t_kx)
+
+    if fcoll != 0:
+        P_RH_coll_even_t_kx, P_RH_coll_odd_t_kx, time, kx_vals = \
+                run.get_P_RH(species_idx=species_idx, passing_trapped=passing_trapped, time_min=time_min, time_max=time_max, time_idx_skip=time_idx_skip, kx_max=kx_max, idxs_kx=idxs_kx, fphi=0, fapar=0, fbpar=0, fcoll=fcoll)
+        P_RH_coll_t_kx  = P_RH_coll_even_t_kx + P_RH_coll_odd_t_kx
+        P_RH_even_t_kx += P_RH_coll_even_t_kx
+        P_RH_odd_t_kx  += P_RH_coll_odd_t_kx
+    else:
+        P_RH_coll_even_t_kx = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_coll_odd_t_kx  = np.zeros_like(P_RH_phi_t_kx)
+        P_RH_coll_t_kx      = np.zeros_like(P_RH_phi_t_kx)
+
+    # Evaluate numerically from time trace.
+    # NOTE: get_E_RH_t_kx has no time_idx_skip of its own (always evaluates
+    # every timestep), so its own (time_E_RH, kx_E_RH) can have a different
+    # length than the phi/apar/bpar/coll arrays above whenever
+    # time_idx_skip != 1 -- keep them local, don't let them clobber the
+    # time/kx_vals this function returns (a real bug when this function
+    # didn't accept time_idx_skip at all, since callers always got 1;
+    # exposed now that get_RH_power_time_averages calls this with
+    # time_idx_skip=10). plot_P_RH has the same E_RH-vs-time_idx_skip
+    # mismatch potential in its own independent computation, but doesn't
+    # expose time_idx_skip as a parameter, so it isn't reachable there.
+    E_RH_t_kx, time_E_RH, kx_E_RH = run.get_E_RH_t_kx(species_idx=species_idx, time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx)
+    P_RH_t_kx_num = np.gradient(E_RH_t_kx, time_E_RH, axis=0)
+
+    # Evaluate hyperdissipation contribution if desired.
+    # NOTE: still on the undecimated (time_E_RH, kx_E_RH) grid, so
+    # P_RH_hyper_t_kx's shape won't match the other returned P_RH_*_t_kx
+    # arrays' shape whenever time_idx_skip != 1 -- not exercised by any
+    # current caller (none pass both D_hyper and time_idx_skip != 1), so
+    # left as-is rather than guessed at; a real fix would need to resample
+    # onto the decimated time grid.
+    if D_hyper is not None:
+        kperp2 = run.ncdata.variables['kperp2'][:][:,0,:,:]
+        kmax = np.sqrt( kperp2.max() )
+        P_RH_hyper_t_kx = -2*D_hyper * E_RH_t_kx * (kx_E_RH[None,:]/kmax)**4
+    else:
+        P_RH_hyper_t_kx = None
+
+    return (P_RH_even_t_kx, P_RH_odd_t_kx,
+            P_RH_phi_even_t_kx, P_RH_phi_odd_t_kx,
+            P_RH_apar_even_t_kx, P_RH_apar_odd_t_kx,
+            P_RH_bpar_even_t_kx, P_RH_bpar_odd_t_kx,
+            P_RH_coll_even_t_kx, P_RH_coll_odd_t_kx,
+            P_RH_hyper_t_kx, time, kx_vals)
+
+
+def plot_P_RH(run, fig=None, axs=None, time_min=0, time_max=1e10, species_idx="sum", passing_trapped="both", idxs_kx=None, kx_max=1e5, colors=None, fphi=1, fapar=1, fbpar=1, fcoll=1, D_hyper=None, combine_fields=False, combine_even_odd=False):
+    """...
+    By default (combine_fields=False, combine_even_odd=False) shows the
+    full breakdown: phi/apar/bpar/coll each get their own color, and
+    even-/odd-parity contributions each get their own panel.
+
+    combine_even_odd=True drops the separate even/odd panels, keeping
+    only the always-present total+numerical-cross-check panel; each
+    field's even+odd sum is drawn there instead.
+
+    combine_fields=True drops the per-field phi/apar/bpar breakdown --
+    coll is kept separate regardless of this flag, since it's a
+    different physical mechanism (collisional dissipation), not a field
+    -- only each panel's own field-summed total is drawn.
+
+    Both True collapses to the single grand-total + numerical panel with
+    no other lines (the pre-breakdown view).
+
+    axs (returned) is always a flat list of the axes actually created:
+    length 1 (just the total/cross-check panel) if combine_even_odd,
+    else length 3 ([even panel, odd panel, total panel]) -- axs[-1] is
+    always the total/cross-check panel, regardless of mode.
+    """
+    nrows = 1 if combine_even_odd else 3
+    fig, axs = get_or_create_ax(fig, axs, nrows=nrows, ncols=1, figsize=(12, 6 if combine_even_odd else 16))
+    axs = list(np.atleast_1d(axs))
 
     # Evaluate from NL fluxes
     P_RH_phi_even_t_kx, P_RH_phi_odd_t_kx, time, kx_vals = \
@@ -510,6 +626,11 @@ def plot_P_RH(run, fig=None, axs=None, time_min=0, time_max=1e10, species_idx="s
     else:
         P_RH_hyper_t_kx = None
 
+    ax_total = axs[-1]
+    ylabel = r"$P_\mathrm{RH}$" if combine_even_odd else r"$P_\mathrm{RH}^+ + P_\mathrm{RH}^-$"
+    if D_hyper is not None:
+        ylabel += r"$+ P_\mathrm{RH}^\mathrm{hyper}$"
+
     for i_kx, kx in enumerate(kx_vals):
 
         if kx <= 0:
@@ -524,50 +645,73 @@ def plot_P_RH(run, fig=None, axs=None, time_min=0, time_max=1e10, species_idx="s
             c_bpar  = 'forestgreen'
             c_coll  = 'orange'
         else:
-            c_num   = colors[i_kx] 
-            c_tot   = colors[i_kx] 
-            c_phi   = colors[i_kx] 
-            c_apar  = colors[i_kx] 
-            c_bpar  = colors[i_kx] 
-            c_coll  = colors[i_kx] 
+            c_num   = colors[i_kx]
+            c_tot   = colors[i_kx]
+            c_phi   = colors[i_kx]
+            c_apar  = colors[i_kx]
+            c_bpar  = colors[i_kx]
+            c_coll  = colors[i_kx]
 
-        axs[0].plot(time, P_RH_even_t_kx[:,i_kx], 
-                    label=r"$k_x \rho = %.3f$" % (kx), c=c_tot, lw=2)
-        axs[1].plot(time, P_RH_odd_t_kx[:,i_kx],  
-                    label=r"$k_x \rho = %.3f$" % (kx), c=c_tot, lw=2)
         P_RH_tot_t_kx = P_RH_even_t_kx + P_RH_odd_t_kx
-        ylabel = r"$P_\mathrm{RH}^+ + P_\mathrm{RH}^-$"
         if D_hyper is not None:
-            P_RH_tot_t_kx += P_RH_hyper_t_kx
-            ylabel += r"$+ P_\mathrm{RH}^\mathrm{hyper}$"
+            P_RH_tot_t_kx = P_RH_tot_t_kx + P_RH_hyper_t_kx
 
-        axs[2].plot(time, P_RH_tot_t_kx[:,i_kx], c=c_tot, lw=2)
-        axs[2].plot(time, P_RH_t_kx_num[:,i_kx], ls=(0, (3, 5, 1, 5, 1, 5)), lw=2,c=c_num)
+        ax_total.plot(time, P_RH_tot_t_kx[:,i_kx], c=c_tot, lw=2, label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx))
+        ax_total.plot(time, P_RH_t_kx_num[:,i_kx], ls=(0, (3, 5, 1, 5, 1, 5)), lw=2, c=c_num)
 
-        if fphi != 0:
-            axs[0].plot(time, P_RH_phi_even_t_kx[:,i_kx], c=c_phi, ls='--')
-            axs[1].plot(time, P_RH_phi_odd_t_kx[ :,i_kx], c=c_phi, ls='--')
-            axs[2].plot(time, P_RH_phi_t_kx[     :,i_kx], c=c_phi, ls='--')
+        if not combine_even_odd:
+            axs[0].plot(time, P_RH_even_t_kx[:,i_kx],
+                        label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=c_tot, lw=2)
+            axs[1].plot(time, P_RH_odd_t_kx[:,i_kx],
+                        label=r"$k_x %s = %.3f$" % (get_rho_label(run.ncdata), kx), c=c_tot, lw=2)
 
-        if fapar != 0:
-            axs[0].plot(time, P_RH_apar_even_t_kx[:,i_kx], c=c_apar, ls='-.')
-            axs[1].plot(time, P_RH_apar_odd_t_kx[ :,i_kx], c=c_apar, ls='-.')
-            axs[2].plot(time, P_RH_apar_t_kx[     :,i_kx], c=c_apar, ls='-.')
+        if not combine_fields:
+            if fphi != 0:
+                if combine_even_odd:
+                    ax_total.plot(time, P_RH_phi_t_kx[:,i_kx], c=c_phi, ls='--')
+                else:
+                    axs[0].plot(time, P_RH_phi_even_t_kx[:,i_kx], c=c_phi, ls='--')
+                    axs[1].plot(time, P_RH_phi_odd_t_kx[ :,i_kx], c=c_phi, ls='--')
+                    ax_total.plot(time, P_RH_phi_t_kx[    :,i_kx], c=c_phi, ls='--')
 
-        if fbpar != 0:
-            axs[0].plot(time, P_RH_bpar_even_t_kx[:,i_kx], c=c_bpar, ls=':')
-            axs[1].plot(time, P_RH_bpar_odd_t_kx[ :,i_kx], c=c_bpar, ls=':')
-            axs[2].plot(time, P_RH_bpar_t_kx[     :,i_kx], c=c_bpar, ls=':')
+            if fapar != 0:
+                if combine_even_odd:
+                    ax_total.plot(time, P_RH_apar_t_kx[:,i_kx], c=c_apar, ls='-.')
+                else:
+                    axs[0].plot(time, P_RH_apar_even_t_kx[:,i_kx], c=c_apar, ls='-.')
+                    axs[1].plot(time, P_RH_apar_odd_t_kx[ :,i_kx], c=c_apar, ls='-.')
+                    ax_total.plot(time, P_RH_apar_t_kx[    :,i_kx], c=c_apar, ls='-.')
 
-        if fcoll != 0:
-            axs[0].plot(time, P_RH_coll_even_t_kx[:,i_kx], c=c_coll, ls=':')
-            axs[1].plot(time, P_RH_coll_odd_t_kx[ :,i_kx], c=c_coll, ls=':')
-            axs[2].plot(time, P_RH_coll_t_kx[     :,i_kx], c=c_coll, ls=':')
+            if fbpar != 0:
+                if combine_even_odd:
+                    ax_total.plot(time, P_RH_bpar_t_kx[:,i_kx], c=c_bpar, ls=':')
+                else:
+                    axs[0].plot(time, P_RH_bpar_even_t_kx[:,i_kx], c=c_bpar, ls=':')
+                    axs[1].plot(time, P_RH_bpar_odd_t_kx[ :,i_kx], c=c_bpar, ls=':')
+                    ax_total.plot(time, P_RH_bpar_t_kx[    :,i_kx], c=c_bpar, ls=':')
 
-    axs[0].set_ylabel(r"$P_\mathrm{RH}^+$")
-    axs[1].set_ylabel(r"$P_\mathrm{RH}^-$")
-    axs[2].set_ylabel(ylabel)
-    axs[2].set_xlabel(r"$t v_{T}/a$")
+            if fcoll != 0:
+                if combine_even_odd:
+                    ax_total.plot(time, P_RH_coll_t_kx[:,i_kx], c=c_coll, ls=':')
+                else:
+                    axs[0].plot(time, P_RH_coll_even_t_kx[:,i_kx], c=c_coll, ls=':')
+                    axs[1].plot(time, P_RH_coll_odd_t_kx[ :,i_kx], c=c_coll, ls=':')
+                    ax_total.plot(time, P_RH_coll_t_kx[    :,i_kx], c=c_coll, ls=':')
+        elif fcoll != 0:
+            # coll is never folded into combine_fields (it's not a field) --
+            # always shown separately, even when phi/apar/bpar are combined.
+            if combine_even_odd:
+                ax_total.plot(time, P_RH_coll_t_kx[:,i_kx], c=c_coll, ls=':')
+            else:
+                axs[0].plot(time, P_RH_coll_even_t_kx[:,i_kx], c=c_coll, ls=':')
+                axs[1].plot(time, P_RH_coll_odd_t_kx[ :,i_kx], c=c_coll, ls=':')
+                ax_total.plot(time, P_RH_coll_t_kx[    :,i_kx], c=c_coll, ls=':')
+
+    if not combine_even_odd:
+        axs[0].set_ylabel(r"$P_\mathrm{RH}^+$")
+        axs[1].set_ylabel(r"$P_\mathrm{RH}^-$")
+    ax_total.set_ylabel(ylabel)
+    ax_total.set_xlabel(r"$t %s/a$" % get_vt_label(run.ncdata))
 
     for ax in axs:
         ax.grid(True)

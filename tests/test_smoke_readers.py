@@ -58,7 +58,7 @@ def test_run_collection_wraps_run(synthetic_stella_run, tmp_path):
     # RunCollection takes filenames, not StellaRun objects -- reconstruct
     # from the same filename_base the fixture already set up.
     scan = RunCollection([synthetic_stella_run.filename_base], labels=["run"])
-    assert len(scan.list_dataObj) == 1
+    assert len(scan.list_runs) == 1
 
     ax = scan.plot_phi_vs_zed()
     assert ax is not None

@@ -8,6 +8,7 @@ Extracted from example_plots/plot_contour_quantity_vs_t_x.py.
 import numpy as np
 
 from stella_diagnostics.io.cache import cached
+from stella_diagnostics.io.codes import get_rho_label
 
 _QUANTITY_TITLES = {
     "phi": r"$\varphi$",
@@ -83,10 +84,11 @@ def add_qflx_phi2_overlay(ax, run):
     norm = np.log10(qflx.max()) / (xmax / 2)
     ax.plot(time, np.log10(qflx) / norm - xmax, c="k", label=r"$Q$")
 
+    rho_label = get_rho_label(run.ncdata)
     norm = phi2_Z.max() / (xmax / 2)
     ax.plot(time_phi, phi2_Z / norm - xmax, c="0.5", label=r"$(\phi^Z)^2$")
-    ax.plot(time_phi, phi2_Z_LW / norm - xmax, c="0.5", label=r"$(\phi^Z)^2 (k_x \rho_i<0.3)$", ls="--", lw=2)
-    ax.plot(time_phi, phi2_Z_SW / norm - xmax, c="0.5", label=r"$(\phi^Z)^2 (k_x \rho_i \geq 0.3)$", ls=":", lw=2)
+    ax.plot(time_phi, phi2_Z_LW / norm - xmax, c="0.5", label=r"$(\phi^Z)^2 (k_x %s<0.3)$" % rho_label, ls="--", lw=2)
+    ax.plot(time_phi, phi2_Z_SW / norm - xmax, c="0.5", label=r"$(\phi^Z)^2 (k_x %s \geq 0.3)$" % rho_label, ls=":", lw=2)
 
     norm = phi2_NZ.max() / (xmax / 2)
     ax.plot(time_phi, phi2_NZ / norm - xmax, c="forestgreen", label=r"$(\phi^{NZ})^2$")

@@ -8,7 +8,9 @@ vnew -> LaTeX label string, e.g. {0.0001: r"$10^{-4}$"}), `vnew_dirs`
 (dict mapping vnew -> its directory-name suffix, e.g. {0.0001: "0.0001"}),
 `basedir` (the run directory prefix, e.g.
 "2026-.../run_..._vnew-"), all required, plus optionally `eps`,
-`filename`, `code`, `figname`.
+`filename`, `code`, `figname`, `time_min`, `time_max`, `kx_max`,
+`passing_trapped`, `fphi`, `fapar`, `fbpar`, `fcoll` (forwarded to
+get_RH_per_kx_means, see that function's own defaults).
 
 NOTE: the original script mapped vnew -> its LaTeX label (and directory
 suffix) via an if/elif chain with no else/default -- if a new vnew value
@@ -35,6 +37,10 @@ config = load_scan_config(sys.argv[1], required=("vnew_vals", "tprim_vals", "vne
 eps = getattr(config, "eps", 0.18)
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+rh_kwargs = {}
+for name in ("time_min", "time_max", "kx_max", "passing_trapped", "fphi", "fapar", "fbpar", "fcoll"):
+    if hasattr(config, name):
+        rh_kwargs[name] = getattr(config, name)
 
 fig, ax = plt.subplots(figsize=(9, 6))
 
@@ -46,7 +52,7 @@ for vnew in config.vnew_vals:
 
         try:
             run = StellaRun(dirname + "/" + filename, code=code)
-            kx, P_RH_coll_mean_kx_norm = get_P_RH_coll_normalized_vs_kx(run, vnew, eps=eps)
+            kx, P_RH_coll_mean_kx_norm = get_P_RH_coll_normalized_vs_kx(run, vnew, eps=eps, **rh_kwargs)
             if kx is None:
                 continue
 

@@ -82,10 +82,6 @@ for i_dir, dirname in enumerate(config.dirnames):
         par_der_order=par_der_order, alt_slow_eval=False, scale_eps=eps, cmap="inferno",
     )
 
-    np.savetxt(dirname + "/data_kx.dat", kx)
-    np.savetxt(dirname + "/data_omega.dat", omega)
-    np.savetxt(dirname + "/data_f_kx_omega.dat", f_kx_omega)
-
     title_ax = labels[i_dir]
     ax.set_title(title_ax)
     fig.colorbar(im, ax=ax)
@@ -102,6 +98,17 @@ for i_dir, dirname in enumerate(config.dirnames):
     ax.set_xlabel(r"$k_x \rho_i$")
 
     if overlay_secondary:
+        # NOTE: pre-existing bug (predates this restructure) -- reads
+        # "data_omegar.dat", but nothing anywhere in this codebase ever
+        # writes a file by that name (this script's own kx/omega/
+        # f_kx_omega used to be dumped as "data_kx.dat"/"data_omega.dat"/
+        # "data_f_kx_omega.dat" -- since removed in favor of the cache
+        # system, see get_kx_omega_spectrum). This overlay was therefore
+        # always reading from some other, external process's pre-generated
+        # output at dir_secondary, not from a self-produced cache -- left
+        # untouched rather than routed through StellaRun/the cache system,
+        # since dir_secondary isn't necessarily even a stella run
+        # directory in the same sense as everything else in this file.
         for vExP in vExP_secondary:
             dir_secondary = basedir_secondary + "/tpar-0.00_tprp-3.00_phase-0.00_fprim-0.00_tprim-0.00_qinp-%.2f_vExP-%.2f_kyP-0.01/" % (2.8, vExP)
             k_sec = np.loadtxt(dir_secondary + "/data_kx.dat")

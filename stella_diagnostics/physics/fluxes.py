@@ -20,20 +20,23 @@ def flux_norm(run):
     grho      = run.ncdata.variables['grho'][:,0]
     dl_over_b = run.dl_over_B_avg()
 
-    flux_norm = np.sum(grho*dl_over_b)
-    print("\n"+run.filename_base+": flux_norm = %e" % (flux_norm))
+    norm = np.sum(grho*dl_over_b)
+    print("\n"+run.filename_base+": flux_norm = %e" % (norm))
 
-    return flux_norm
+    return norm
 
 
 def read_flux_spectra(run, species_idx=0, tube=0):#, zed_slice=None, kx_slice=None, ky_slice=None, t_slice=None):
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- 'qflx_kxky' is an older stella netCDF variable
-    # name; some stella versions write 'qflux_vs_kxkys' instead, which
-    # raises KeyError here. See README "Known issues".
-	# qflx_kxky(t, species, tube, zed, kx, ky)
+    # qflx_kxky(t, species, tube, zed, kx, ky) -- older stella netCDF
+    # variable name; some stella versions write qflux_vs_kxkyzs instead
+    # (same shape/dim order -- confirmed against a real run; NOT
+    # qflux_vs_kxkyzs's zed-integrated sibling qflux_vs_kxkys, which is
+    # missing the tube/zed dims this function needs).
     if run.code == "stella":
-        qflx_t_zed_kx_ky = run.ncdata.variables['qflx_kxky'][:,species_idx, tube, :, :, :]
+        try:
+            qflx_t_zed_kx_ky = run.ncdata.variables['qflx_kxky'][:,species_idx, tube, :, :, :]
+        except KeyError:
+            qflx_t_zed_kx_ky = run.ncdata.variables['qflux_vs_kxkyzs'][:,species_idx, tube, :, :, :]
     elif run.code == "GX":
         qflx_t_zed_kx_ky = np.transpose(run.ncdata['Diagnostics']['HeatFlux_kxkyzst'][:,species_idx, :, :, :], axes=(0,1,3,2))
 

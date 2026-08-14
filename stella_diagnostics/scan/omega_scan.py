@@ -13,15 +13,43 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 
+from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 
-def plot_omega_ky(run, fig=None, axs=None, label=None, ls=None, color=None, markersize=10, marker='o', gamma_min=-np.inf, delta_t_avg=None, t_val=None, kx_idx=0, check_convergence=True, rescale_vT=1, rescale_omega=1):
 
+def _reference_run_ncdata(run):
+    """`run` here is actually a RunCollection (see the delegate methods in
+    scan.run_collection) -- pulls the first underlying StellaRun's ncdata
+    for the species-label helpers, or None if the collection is empty/
+    unloaded, so callers can fall back to an unsubscripted label instead
+    of crashing.
+    """
     try:
-        omega = run.omega_r
-        gamma = run.omega_i
-        ky    = run.ky
+        return run.list_runs[0].ncdata
+    except (IndexError, AttributeError):
+        return None
+
+
+def _ensure_omegas_loaded(run, time_avg=None, time_val_avg=None, check_convergence=True):
+    """Loads run.omega_r/omega_i/kx/ky via run.load_omegas() unless
+    they're already present as attributes (e.g. from an earlier call) --
+    the same guard duplicated verbatim across plot_omega_ky, plot_omega_kx,
+    and plot_contour_gamma_kx_ky. load_omegas always sets om_time/ky/kx/
+    omega_r/omega_i together, so checking all 4 here (the 3 original
+    guards each checked a different subset of them) is equivalent in
+    practice to what each one checked before.
+    """
+    try:
+        run.omega_r
+        run.omega_i
+        run.kx
+        run.ky
     except:
-        run.load_omegas(delta_t_avg=delta_t_avg, t_val=t_val, check_convergence=check_convergence)
+        run.load_omegas(time_avg=time_avg, time_val_avg=time_val_avg, check_convergence=check_convergence)
+
+
+def plot_omega_ky(run, fig=None, axs=None, label=None, ls=None, color=None, markersize=10, marker='o', gamma_min=-np.inf, time_avg=None, time_val_avg=None, kx_idx=0, check_convergence=True, rescale_vT=1, rescale_omega=1):
+
+    _ensure_omegas_loaded(run, time_avg=time_avg, time_val_avg=time_val_avg, check_convergence=check_convergence)
 
     # Pick kx index with maximum gamma for each ky
     if kx_idx =="max":
@@ -52,28 +80,27 @@ def plot_omega_ky(run, fig=None, axs=None, label=None, ls=None, color=None, mark
     if axs is None:
         fig, axs = plt.subplots(nrows=2,ncols=1, figsize=(12,9))
 
+    ncdata = _reference_run_ncdata(run)
+    vt_label = get_vt_label(ncdata) if ncdata is not None else "T"
+    rho_label = get_rho_label(ncdata) if ncdata is not None else r"\rho"
+
     axs[0].plot(ky_plt[omega_i_plt>gamma_min]/rescale_vT, omega_i_plt[omega_i_plt>gamma_min]*rescale_vT*rescale_omega, ls=ls, c=color, label=label, marker=marker, markersize=markersize, markerfacecolor='None')
     #axs[0].plot(run.ky[run.omega_i>gamma_min], run.omega_i[run.omega_i>gamma_min], ls=ls, c=color, label=label, marker=marker)
-    axs[0].set_ylabel(r"$\gamma a/v_T$")
+    axs[0].set_ylabel(r"$\gamma a/%s$" % vt_label)
     axs[0].set_xticklabels([])
 
     axs[1].plot(ky_plt[omega_i_plt>gamma_min]/rescale_vT, omega_r_plt[omega_i_plt>gamma_min]*rescale_vT*rescale_omega, ls=ls, c=color, label=label, marker=marker, markersize=markersize, markerfacecolor='None')
     #axs[1].plot(run.ky[run.omega_i>gamma_min], run.omega_r[run.omega_i>gamma_min], ls=ls, c=color, label=label, marker=marker)
-    axs[1].set_ylabel(r"$\omega_r a/v_T$")
+    axs[1].set_ylabel(r"$\omega_r a/%s$" % vt_label)
 
-    axs[1].set_xlabel(r"$k_y \rho_i$")
+    axs[1].set_xlabel(r"$k_y %s$" % rho_label)
 
     return fig, axs, omega_r_plt, omega_i_plt, ky_plt
 
 
-def plot_omega_kx(run, axs=None, label=None, ls=None, color=None, marker='o', gamma_min=-np.inf, delta_t_avg=None, t_val=None, ky_idx=0):
+def plot_omega_kx(run, axs=None, label=None, ls=None, color=None, marker='o', gamma_min=-np.inf, time_avg=None, time_val_avg=None, ky_idx=0):
 
-    try:
-        omega = run.omega_r
-        gamma = run.omega_i
-        kx    = run.kx
-    except:
-        run.load_omegas(delta_t_avg=delta_t_avg, t_val=t_val)
+    _ensure_omegas_loaded(run, time_avg=time_avg, time_val_avg=time_val_avg)
 
     # Pick ky index with maximum gamma for each kx
     if ky_idx =="max":
@@ -102,26 +129,25 @@ def plot_omega_kx(run, axs=None, label=None, ls=None, color=None, marker='o', ga
     if axs is None:
         fig, axs = plt.subplots(nrows=2,ncols=1, figsize=(12,9))
 
+    ncdata = _reference_run_ncdata(run)
+    vt_label = get_vt_label(ncdata) if ncdata is not None else "T"
+    rho_label = get_rho_label(ncdata) if ncdata is not None else r"\rho"
+
     axs[0].plot(kx_plt[omega_i_plt>gamma_min], omega_i_plt[omega_i_plt>gamma_min], ls=ls, c=color, label=label, marker=marker)
-    axs[0].set_ylabel(r"$\gamma a/v_T$")
+    axs[0].set_ylabel(r"$\gamma a/%s$" % vt_label)
     axs[0].set_xticklabels([])
 
     axs[1].plot(kx_plt[omega_i_plt>gamma_min], omega_r_plt[omega_i_plt>gamma_min], ls=ls, c=color, label=label, marker=marker)
-    axs[1].set_ylabel(r"$\omega_r a/v_T$")
+    axs[1].set_ylabel(r"$\omega_r a/%s$" % vt_label)
 
-    axs[1].set_xlabel(r"$k_x \rho_i$")
+    axs[1].set_xlabel(r"$k_x %s$" % rho_label)
 
     return axs
 
 
-def plot_contour_gamma_kx_ky(run, ax=None, delta_t_avg=None, t_val=None):
+def plot_contour_gamma_kx_ky(run, ax=None, time_avg=None, time_val_avg=None):
 
-    try:
-        omega = run.omega_r
-        gamma = run.omega_i
-        kx    = run.kx
-    except:
-        run.load_omegas(delta_t_avg=delta_t_avg, t_val=t_val)
+    _ensure_omegas_loaded(run, time_avg=time_avg, time_val_avg=time_val_avg)
 
     omega_i_plt = run.omega_i[0,:,:]
     kx_plt      = run.kx[0,0,:]
@@ -140,8 +166,12 @@ def plot_contour_gamma_kx_ky(run, ax=None, delta_t_avg=None, t_val=None):
 
     im = ax.pcolormesh(X, Y, Z, shading='auto', cmap='magma', vmin=0)
 
-    ax.set_title(r"$\gamma a/v_T$")
-    ax.set_xlabel(r"$k_x \rho_i$")
-    ax.set_ylabel(r"$k_y \rho_i$")
+    ncdata = _reference_run_ncdata(run)
+    vt_label = get_vt_label(ncdata) if ncdata is not None else "T"
+    rho_label = get_rho_label(ncdata) if ncdata is not None else r"\rho"
+
+    ax.set_title(r"$\gamma a/%s$" % vt_label)
+    ax.set_xlabel(r"$k_x %s$" % rho_label)
+    ax.set_ylabel(r"$k_y %s$" % rho_label)
 
     return ax, im

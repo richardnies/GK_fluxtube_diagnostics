@@ -13,21 +13,69 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
+from stella_diagnostics.io.cache import cached
+from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 
 
-def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, nonconverged_to_none=True, delta_t_avg=None, t_val=None):
-    kx   = run.ncdata.variables['kx'][:]
-    ky   = run.ncdata.variables['ky'][:]
+def _resample_uniform_time(f_t, time, axis=0):
+    """(f_t_interp, time_interp, dt): resamples f_t (time along `axis`)
+    to a uniform time grid via linear interpolation, dt = max(gradient
+    (time)) -- the resample-to-equal-time-intervals step duplicated
+    verbatim (up to the FFT axis) across get_quantity_omega_zed_kx,
+    get_quantity_filtered_in_omega, and get_kx_omega_spectrum. Their
+    subsequent FFT/filter steps differ in real ways (FFT axis, omega
+    sign convention, strict vs. non-strict filter bounds) and are left
+    un-merged.
+    """
+    dt = np.max(np.gradient(time))
+    time_interp = np.arange(time[0], time[-1], dt)
+    f_interp = interp(time, f_t, assume_sorted=True, axis=axis)
+    return f_interp(time_interp), time_interp, dt
+
+
+def _read_omega_ascii_file(run):
+    """(omega_data, has_raw, has_avg): parse run.omega_file, reshaped to
+    (Nr_timesteps, dim_ky, dim_kx, Ncols).
+
+    stella's .omega file has one of three layouts, controlled by two
+    independent namelist flags (write_omega_vs_kxky, write_omega_avg_vs_kxky
+    in parameters_diagnostics -- see diagnostics_omega.f90's
+    open_omega_ascii_file/write_omega_to_ascii_file, confirmed directly
+    against that source):
+      - both flags on  -> 7 columns [time ky kx Re(om) Im(om) Re(omavg) Im(omavg)]
+      - avg flag only  -> 5 columns [time ky kx Re(omavg) Im(omavg)]
+      - vs_kxky only   -> 5 columns [time ky kx Re(om) Im(om)]  (instantaneous)
+    The two 5-column layouts have identical shape but different content, so
+    they can only be told apart by the header text (the avg-only header
+    contains "omavg"; the instantaneous-only header says "frequency"/
+    "growth rate" instead).
+    """
+    kx = run.ncdata.variables['kx'][:]
+    ky = run.ncdata.variables['ky'][:]
     dim_kx = len(kx)
     dim_ky = len(ky)
 
-    # omega is in format [time ky kx Re[om] Im[om] Re[omavg] Im[omavg]]
-    # omega_data has dim (N_time)*(N_ky)*(N_kx)*(7)
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- this hardcoded 7-column reshape fails outright
-    # against stella versions that write a 5-column .omega file instead.
+    with open(run.omega_file) as f:
+        header = f.readline()
+
+    raw_data = np.loadtxt(run.omega_file, dtype='float')
+    ncols = raw_data.shape[1]
+    omega_data = raw_data.reshape(-1, dim_ky, dim_kx, ncols)
+
+    if ncols == 7:
+        has_raw, has_avg = True, True
+    elif ncols == 5:
+        has_avg = 'omavg' in header.lower()
+        has_raw = not has_avg
+    else:
+        raise ValueError("%s: .omega file has %i columns per row; expected 5 or 7." % (run.filename_base, ncols))
+
+    return omega_data, has_raw, has_avg
+
+
+def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, nonconverged_to_none=True, time_avg=None, time_val_avg=None):
     if run.code == "stella":
-        omega_data = np.loadtxt(run.omega_file, dtype='float').reshape(-1, dim_ky, dim_kx, 7)
+        omega_data, has_raw, has_avg = _read_omega_ascii_file(run)
         time_all = omega_data[:,0,0,0]
 
     elif run.code == "GX":
@@ -44,36 +92,44 @@ def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, non
         omega_data[:,:,:,3] = omega_v_time[:,:,:,0]
         omega_data[:,:,:,4] = omega_v_time[:,:,:,1]
 
+        has_raw, has_avg = True, True
         om_avg = False
 
-    # Make sure t_val is smaller or equal to the maximal time
-    if t_val is not None:
-        t_val = min(t_val, time_all[-1])
+    # Make sure time_val_avg is smaller or equal to the maximal time
+    if time_val_avg is not None:
+        time_val_avg = min(time_val_avg, time_all[-1])
 
-    if delta_t_avg is None:
-        if t_val is None:
+    if time_avg is None:
+        if time_val_avg is None:
             omega_slice = omega_data[timestep]
         else:
-            omega_slice = omega_data[np.argmin( np.abs(time_all - t_val) )]
+            omega_slice = omega_data[np.argmin( np.abs(time_all - time_val_avg) )]
     else:
-        if t_val is None:
-            omega_slice = np.mean(omega_data[ np.logical_and(time_all > time_all[timestep]-delta_t_avg, time_all <= time_all[timestep])], axis=0)
+        if time_val_avg is None:
+            omega_slice = np.mean(omega_data[ np.logical_and(time_all > time_all[timestep]-time_avg, time_all <= time_all[timestep])], axis=0)
         else:
-            omega_slice = np.mean(omega_data[ np.logical_and(time_all > t_val-delta_t_avg, time_all <= t_val)], axis=0)
+            omega_slice = np.mean(omega_data[ np.logical_and(time_all > time_val_avg-time_avg, time_all <= time_val_avg)], axis=0)
 
- 
+
     time     = omega_slice[:,:,0]
     ky       = omega_slice[:,:,1]
     kx       = omega_slice[:,:,2]
     if om_avg:
-        omega_r = omega_slice[:,:,5]
-        omega_i = omega_slice[:,:,6]
+        if not has_avg:
+            raise ValueError("%s: requested om_avg=True but the .omega file only has the instantaneous (non-time-averaged) frequency -- rerun stella with write_omega_avg_vs_kxky=.true. to get the time-averaged omega, or pass om_avg=False." % run.filename_base)
+        omega_r, omega_i = (omega_slice[:,:,5], omega_slice[:,:,6]) if has_raw else (omega_slice[:,:,3], omega_slice[:,:,4])
     else:
+        if not has_raw:
+            raise ValueError("%s: requested om_avg=False but the .omega file only has the time-averaged frequency -- rerun stella with write_omega_vs_kxky=.true. to get the instantaneous omega, or pass om_avg=True." % run.filename_base)
         omega_r = omega_slice[:,:,3]
         omega_i = omega_slice[:,:,4]
 
 
-    if delta_t_avg is None and check_convergence and len(kx) == len(ky) == 1:
+    # NOTE: this convergence check compares the file's own om_avg column
+    # between the last two timesteps -- only meaningful when the file
+    # actually has both the raw and averaged columns (the 7-column format);
+    # skipped for 5-column files (nothing to compare it against).
+    if time_avg is None and check_convergence and len(kx) == len(ky) == 1 and has_raw and has_avg:
         omega_r_prev = omega_data[timestep-1][0][0][5]
         omega_i_prev = omega_data[timestep-1][0][0][6]
 
@@ -95,23 +151,45 @@ def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, non
     return time, ky, kx, omega_r, omega_i
 
 
-def read_omega_t(run, delta_t_avg=None):
-    # NOTE: pre-existing bug (predates the restructure, confirmed against
-    # real stella runs) -- only works for single-(kx,ky)-point linear
-    # runs. read_data_omega_k returns a (dim_ky, dim_kx)-shaped omega_r/
-    # omega_i for multi-mode runs, but the assignment below
-    # (omega_r[i] = ...) expects a scalar, so it raises ValueError as
-    # soon as a run has more than one (kx,ky) mode.
-    omega_data = np.loadtxt(run.omega_file)
-    Nr_timesteps = len(omega_data)
+def read_omega_t(run, time_avg=None):
+    """(time, omega_r, omega_i): time trace of the complex frequency at
+    every (kx,ky) mode in the run. omega_r/omega_i have shape
+    (Nr_timesteps,) for a single-(kx,ky)-mode run (unchanged from
+    before), or (Nr_timesteps, dim_ky, dim_kx) for a multi-mode run --
+    previously always raised ValueError for a multi-mode run, both
+    because Nr_timesteps was miscounted (len() of the raw, un-reshaped
+    .omega file -- every (ky,kx) row at a given time counted as its own
+    "timestep" -- rather than the true number of distinct time samples)
+    and because the per-timestep assignment
+    (omega_r[i] = read_data_omega_k(...)) expected a scalar but
+    read_data_omega_k returns a (dim_ky, dim_kx)-shaped array whenever
+    there's more than one mode.
+
+    Uses the time-averaged omega (om_avg=True) if the .omega file has it,
+    else falls back to the instantaneous one -- see _read_omega_ascii_file.
+    """
+    dim_kx = len(run.ncdata.variables['kx'][:])
+    dim_ky = len(run.ncdata.variables['ky'][:])
+
+    omega_data, has_raw, has_avg = _read_omega_ascii_file(run)
+    Nr_timesteps = omega_data.shape[0]
+    om_avg = has_avg
 
     time    = np.zeros(Nr_timesteps)
-    omega_r = np.zeros(Nr_timesteps)
-    omega_i = np.zeros(Nr_timesteps)
+    omega_r = np.zeros((Nr_timesteps, dim_ky, dim_kx))
+    omega_i = np.zeros((Nr_timesteps, dim_ky, dim_kx))
 
     for i in range(Nr_timesteps):
 
-        time[i], _, _, omega_r[i], omega_i[i] = run.read_data_omega_k(timestep=i, check_convergence=False, delta_t_avg=delta_t_avg)
+        # read_data_omega_k's own "time" return is (dim_ky, dim_kx)-shaped
+        # too (the same time value broadcast across every mode at this
+        # timestep) -- take a single value from it for the 1D time array.
+        time_ik, _, _, omega_r[i], omega_i[i] = run.read_data_omega_k(timestep=i, check_convergence=False, time_avg=time_avg, om_avg=om_avg)
+        time[i] = np.asarray(time_ik).flat[0]
+
+    if dim_ky == 1 and dim_kx == 1:
+        omega_r = omega_r[:,0,0]
+        omega_i = omega_i[:,0,0]
 
     return time, omega_r, omega_i
 
@@ -135,10 +213,7 @@ def get_quantity_omega_zed_kx(run, quantity, time_min, time_max, time_idx_skip=1
         f_t_zed_kx[i_idx] = f_zed_kx_ky[:,:,0]
 
     # Resample to equal time-intervals
-    dt = (np.gradient(time)).max()
-    time_interp = np.arange(time[0], time[-1], dt)
-    f_interp = interp(time, f_t_zed_kx, assume_sorted=True, axis=0)
-    f_t_zed_kx_interp = f_interp(time_interp)
+    f_t_zed_kx_interp, time_interp, dt = _resample_uniform_time(f_t_zed_kx, time, axis=0)
 
     # Fourier transform time to omega
     f_omega_zed_kx = np.fft.fft(f_t_zed_kx_interp, axis=0)
@@ -158,10 +233,7 @@ def get_quantity_omega_zed_kx(run, quantity, time_min, time_max, time_idx_skip=1
 def get_quantity_filtered_in_omega(run, f_t, time, omega_min=-np.inf, omega_max=np.inf):
 
     # Resample to equal time-intervals
-    dt = np.max(np.gradient(time))
-    time_interp = np.arange(time[0], time[-1], dt)
-    f_interp = interp(time, f_t, assume_sorted=True, axis=0)
-    f_t_interp = f_interp(time_interp)
+    f_t_interp, time_interp, dt = _resample_uniform_time(f_t, time, axis=0)
 
     # Fourier transform time to omega
     f_omega = np.fft.fft(f_t_interp, axis=0)
@@ -179,11 +251,18 @@ def get_quantity_filtered_in_omega(run, f_t, time, omega_min=-np.inf, omega_max=
     return f_t_filtered, time_new
 
 
-def plot_quantity_kx_omega(run, quantity, time_min, time_max, time_idx_skip=1, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, cmap='inferno', kx_order=0, par_der_order=0, mult_zed=None, zed_val=None, no_plot=False, omega_min=-np.inf, omega_max=np.inf, time_der=False, plot_omega2_kx2=False, mean_delt_zed=None, alt_slow_eval=False, append_mirror=False, normalise_each_kx=False, omega_norm=1, scale_eps=1):
-
+@cached(version=2)
+def get_kx_omega_spectrum(run, quantity, time_min, time_max, time_idx_skip=1, species_idx=0, remove_zonal=False, only_zonal=False, kx_order=0, par_der_order=0, mult_zed=None, zed_val=None, omega_min=-np.inf, omega_max=np.inf, time_der=False, mean_delt_zed=None, alt_slow_eval=False, append_mirror=False, normalise_each_kx=False):
+    """(kx, omega, f_kx_omega): quantity(kx, ky) FFT'd in time to omega,
+    collapsed over ky (summed, or the ky=0 zonal slice if only_zonal),
+    unsorted and unrescaled -- the data half of plot_quantity_kx_omega,
+    extracted so it's cached instead of hand-rolled to a `.dat` file by
+    each caller (see example_plots/plot_contour_quantity_vs_kx_omega.py).
+    plot_quantity_kx_omega itself still does the ascending-order sort and
+    scale_eps rescale, both cheap and both only meaningful for display.
+    """
     kx, ky, zed = run.get_kx_ky_zed()
     time_all    = run.get_time_array(GX_big=True)
-    dl_over_B_avg = run.dl_over_B_avg()
     time_idx_min = nearest_index(time_all - time_min)
     time_idx_max = nearest_index(time_all - time_max)
     time_idxs = range(time_idx_min, time_idx_max, time_idx_skip)
@@ -205,10 +284,7 @@ def plot_quantity_kx_omega(run, quantity, time_min, time_max, time_idx_skip=1, f
         f_kx_ky_t = np.concatenate((f_kx_ky_t, f_kx_ky_t[:,:,::-1]), axis=2)
 
     # Resample to equal time-intervals
-    dt = (np.gradient(time)).max()
-    time_interp = np.arange(time[0], time[-1], dt)
-    f_interp = interp(time, f_kx_ky_t, assume_sorted=True, axis=2)
-    f_kx_ky_t_interp = f_interp(time_interp)
+    f_kx_ky_t_interp, time_interp, dt = _resample_uniform_time(f_kx_ky_t, time, axis=2)
 
     # Take time derivative if required
     if time_der:
@@ -231,19 +307,19 @@ def plot_quantity_kx_omega(run, quantity, time_min, time_max, time_idx_skip=1, f
     f_kx_omega     = f_kx_omega[:, (omega<=omega_max) & (omega>=omega_min)]
     omega  = omega[(omega<=omega_max) & (omega>=omega_min)]
 
- 
+
     if normalise_each_kx:
         for i_kx in range(len(kx)):
             norm = (np.abs(f_kx_omega[i_kx,:])).max()
             if norm != 0:
                 f_kx_omega[i_kx,:] = f_kx_omega[i_kx,:]/norm
 
-    ## Find peak at larger kx
-    #f_kx_omega_subset = f_kx_omega[np.abs(kx) > 0.4]
-    #kx_subset = kx[np.abs(kx) > 0.4]
-    #idx_max = np.argmax( f_kx_omega_subset )
-    #idx_max = np.unravel_index(idx_max, f_kx_omega_subset.shape)
-    #print("kx = %.2e, omega = %.2e, omega/kx = %.2e at maximum (kx > 0.4)." % (kx_subset[idx_max[0]], omega[idx_max[1]], omega[idx_max[1]]/kx_subset[idx_max[0]]))
+    return kx, omega, f_kx_omega
+
+
+def plot_quantity_kx_omega(run, quantity, time_min, time_max, time_idx_skip=1, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, cmap='inferno', kx_order=0, par_der_order=0, mult_zed=None, zed_val=None, no_plot=False, omega_min=-np.inf, omega_max=np.inf, time_der=False, plot_omega2_kx2=False, mean_delt_zed=None, alt_slow_eval=False, append_mirror=False, normalise_each_kx=False, omega_norm=1, scale_eps=1):
+
+    kx, omega, f_kx_omega = get_kx_omega_spectrum(run, quantity, time_min, time_max, time_idx_skip=time_idx_skip, species_idx=species_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, par_der_order=par_der_order, mult_zed=mult_zed, zed_val=zed_val, omega_min=omega_min, omega_max=omega_max, time_der=time_der, mean_delt_zed=mean_delt_zed, alt_slow_eval=alt_slow_eval, append_mirror=append_mirror, normalise_each_kx=normalise_each_kx)
 
     if not no_plot:
         #Ascending order
@@ -286,22 +362,22 @@ def plot_quantity_kx_omega(run, quantity, time_min, time_max, time_idx_skip=1, f
                 #im = ax.pcolormesh(X, Y, Z.T, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
             else:
                 im = ax.pcolormesh(X, Y, Z.T, vmin=vmin, vmax=vmax, shading='auto', cmap=cmap)
-            ax.set_xlabel(r"$k_x \rho_i$")
+            ax.set_xlabel(r"$k_x %s$" % get_rho_label(run.ncdata))
             if scale_eps == 1:
-                ax.set_ylabel(r"$\omega a/v_{Ti}$")
+                ax.set_ylabel(r"$\omega a/%s$" % get_vt_label(run.ncdata))
             else:
-                ax.set_ylabel(r"$\omega R/v_{Ti}$")
+                ax.set_ylabel(r"$\omega R/%s$" % get_vt_label(run.ncdata))
         else:
             X, Y = np.meshgrid(kx**2, (omega/omega_norm)**2)
             if logarithmic:
                 im = ax.pcolormesh(X, Y, Z.T, norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
             else:
                 im = ax.pcolormesh(X, Y, Z.T, vmin=vmin, vmax=vmax, shading='auto', cmap=cmap)
-            ax.set_xlabel(r"$(k_x \rho_i)^2$")
+            ax.set_xlabel(r"$(k_x %s)^2$" % get_rho_label(run.ncdata))
             if scale_eps:
-                ax.set_ylabel(r"$(\omega R/v_T)^2$")
+                ax.set_ylabel(r"$(\omega R/%s)^2$" % get_vt_label(run.ncdata))
             else:
-                ax.set_ylabel(r"$(\omega a/v_T)^2$")
+                ax.set_ylabel(r"$(\omega a/%s)^2$" % get_vt_label(run.ncdata))
 
     else:
         im = None

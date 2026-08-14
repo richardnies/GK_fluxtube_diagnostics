@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.ticker as mticker
 import scipy.special as specialfunc
 from scipy.interpolate import interp1d as interp
 from scipy.interpolate import RegularGridInterpolator as interp2D
@@ -13,7 +14,9 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.spectral.omega import get_avg_stddev_timetrace
-from stella_diagnostics.io.run import StellaRun
+from stella_diagnostics.io.codes import get_rho_label
+from stella_diagnostics.io.run import StellaRun, FALLBACK_ASPECT_RATIO
+from stella_diagnostics.io.cache import cached
 
 
 def _style_from_list(style_list, i, default=None):
@@ -137,8 +140,8 @@ def plot_contour_phi_vs_zed_theta0(run, fig=None, ax=None, normalise_phi=False, 
     array_phi = np.asarray(list_phi)
 
     list_theta0 = []
-    for i, dataObj in enumerate(run.list_dataObj):
-        theta0 = dataObj.read_basic_params()['theta0'][0]
+    for i, single_run in enumerate(run.list_runs):
+        theta0 = single_run.read_basic_params()['theta0'][0]
         list_theta0.append(theta0)
 
     # Normalise phi if desired
@@ -170,130 +173,136 @@ def plot_contour_phi_vs_zed_theta0(run, fig=None, ax=None, normalise_phi=False, 
     return fig, ax, im
 
 
-def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=None, marker_list=None, color_list=None, tprim_norm_list=None, qinp_norm_list=None, xdrift_norm_list=None, delta_t_avg=None, only_zonal=False, remove_zonal=False, scale_kmin=False, k_exp=0, alpha_kx_O=1, beta_kx_O=0, lw=None, no_label=False, scaling_theory="GCB", W_instead_of_phi=False, scale_fac_vals=None, zonal_stationary=False, load_from_file=False, mult_k=False, plot_alpha_spectrum=False, plot_RH_phi_spectrum=False, alpha_plot=1, markersize=3):
+@cached(version=1)
+def get_phi_k_spectrum(run, plot_kx, time_idx=-1, time_avg=None, only_zonal=False, remove_zonal=False, scale_kmin=False, k_exp=0, W_instead_of_phi=False, zonal_stationary=False, plot_RH_phi_spectrum=False):
+    """(k, phi2_k, phi2_k_stddev) for one run -- the data half of
+    plot_phi_k_spectrum, extracted so it's cached instead of hand-rolled
+    to "<filename_base>_Ephi_*.dat"/"..._stddev.dat" files by each caller.
+    """
+    time = run.get_time_array()
+    time_max = time[time_idx]
+    if time_avg is not None:
+        time_min = time_max-time_avg
+    else:
+        time_min = time_max-10
+
+    if plot_RH_phi_spectrum:
+        E_RH_t_kx, RH_time, RH_kx = run.get_E_RH_t_kx(time_min=time_min, time_max=time_max)
+        phi2_k = np.average(E_RH_t_kx[:,RH_kx>0], weights=np.gradient(RH_time), axis=0)*2
+        k      = RH_kx[      RH_kx>0]
+        phi2_k_stddev = np.zeros_like(phi2_k)
+
+    elif not zonal_stationary:
+        if W_instead_of_phi:
+            phi2_t_kx_ky, time, kx, ky = run.read_W_spectra(time_min=time_min, time_max=time_max)
+        else:
+            phi2_t_kx_ky, time, kx, ky = run.read_phi2_spectra(time_min=time_min, time_max=time_max)
+
+        phi2_t_kx_ky[np.isnan(phi2_t_kx_ky)]=0
+
+        if time_avg is None:
+            phi2_kx_ky = phi2_t_kx_ky[-1]
+            phi2_kx_ky_stddev = np.zeros_like(phi2_kx_ky)
+            print("Evaluating at t = %.2f" % (time[-1]))
+        else:
+            phi2_kx_ky = np.average(    phi2_t_kx_ky, weights=np.gradient(time), axis=0)
+            phi2_kx_ky_stddev = np.std( phi2_t_kx_ky,                            axis=0)
+
+        if plot_kx:
+
+            if only_zonal:
+                phi2_kx_ky[:,1:] = 0
+                phi2_kx_ky[0,0]  = 0
+                phi2_kx_ky_stddev[:,1:] = 0
+                phi2_kx_ky_stddev[0,0]  = 0
+                kx = np.array(kx)
+                phi2_kx_ky = phi2_kx_ky[kx > 0, :]
+                phi2_kx_ky_stddev = phi2_kx_ky_stddev[kx > 0, :]
+                kx = kx[kx>0]
+
+            if remove_zonal:
+                phi2_kx_ky[:,0]  = 0
+                phi2_kx_ky_stddev[:,0]  = 0
+
+            phi2_k = np.sum( phi2_kx_ky, axis=1)
+            phi2_k_stddev = np.sum( phi2_kx_ky_stddev, axis=1)
+            idx_sort = np.argsort(kx)
+            k = kx[idx_sort]
+            phi2_k = phi2_k[idx_sort]
+            phi2_k_stddev = phi2_k_stddev[idx_sort]
+            k = np.abs(k)
+
+        else:
+            phi2_k = np.sum( phi2_kx_ky[:,1:], axis=0)
+            phi2_k_stddev = np.sum( phi2_kx_ky_stddev[:,1:], axis=0)
+            k = ky[1:]
+
+    # Stationary zonal flows
+    else:
+        omega, kx, EZ_omega_kx = run.get_EZ_omega_kx(quantity="phi", time_min=-time_avg)
+        k = kx[kx>0]
+        phi2_k = EZ_omega_kx[0, kx>0]*2/k**2
+        # Not a time-average, so there's no real notion of a stddev here
+        # -- zero, matching the plot_RH_phi_spectrum branch's convention
+        # for its own single-snapshot case above.
+        phi2_k_stddev = np.zeros_like(phi2_k)
+
+    # multiply phi2_k with k power if desired
+    phi2_k = phi2_k * k**(k_exp)
+    phi2_k_stddev = phi2_k_stddev * k**(k_exp)
+
+    if scale_kmin:
+        print("Rescaling phi2 with kmin (to be able to compare sims with different x0,y0)")
+        phi2_k = phi2_k / np.abs(k[1]-k[0])
+        phi2_k_stddev = phi2_k_stddev / np.abs(k[1]-k[0])
+
+    return k, phi2_k, phi2_k_stddev
+
+
+def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-1, ls_list=None, marker_list=None, color_list=None, tprim_norm_list=None, qinp_norm_list=None, xdrift_norm_list=None, time_avg=None, only_zonal=False, remove_zonal=False, scale_kmin=False, k_exp=0, alpha_kx_O=1, beta_kx_O=0, lw=None, no_label=False, scaling_theory="GCB", W_instead_of_phi=False, scale_fac_vals=None, zonal_stationary=False, load_from_file=False, mult_k=False, plot_alpha_spectrum=False, plot_RH_phi_spectrum=False, alpha_plot=1, markersize=3):
+    # time_avg (renamed from delta_t_avg): trailing-window width ending at
+    # time[time_idx] -- same trailing-window convention as
+    # stella_diagnostics.scan.zonal_flow_scan/rh_flux_scan and
+    # physics.velocity_space.plot_contour_gvmu_vpa. time_idx default
+    # changed from -2 to -1 (matching every other function's "last
+    # sample" default, including this file's own plot_Q_k_spectrum,
+    # which already defaulted to -1) -- no rationale was found anywhere
+    # for -2; flagged here in case this default mattered for a reason
+    # not visible from the code alone.
+    #
+    # load_from_file: kept only for backward compatibility with existing
+    # configs -- now a no-op, since get_phi_k_spectrum is @cached and
+    # transparently reuses a prior computation whenever nothing relevant
+    # changed, replacing the old hand-rolled
+    # "<filename_base>_Ephi_*.dat"/"..._stddev.dat" file cache this
+    # function used to read/write itself.
 
     if ax is None:
         fig, ax = plt.subplots(nrows=1,ncols=1, figsize=(9,6))
 
 
-    for i, dataObj in enumerate(run.list_dataObj):
+    for i, single_run in enumerate(run.list_runs):
 
-        filename_data = run.filenames_base[i]
-        if W_instead_of_phi:
-            filename_data += "_W-instead-of-phi"
-
-        if plot_kx:
-            if only_zonal:
-                if plot_RH_phi_spectrum:
-                    filename_data += "_Ephi_RH_kx_zonal.dat"
-                else:
-                    filename_data += "_Ephi_kx_zonal.dat"
-            else:
-                filename_data += "_Ephi_kx.dat"
-        else:
-            filename_data += "_Ephi_ky.dat"
-
-        ####### LOAD DATA
-        if exists(filename_data) and load_from_file:
-            phi2_k, k = np.loadtxt(filename_data)
-
-        else:
-            time = dataObj.get_time_array()
-            time_max = time[time_idx]
-            if delta_t_avg is not None:
-                time_min = time_max-delta_t_avg
-            else:
-                time_min = time_max-10
-
-            if plot_RH_phi_spectrum:
-                E_RH_t_kx, RH_time, RH_kx = dataObj.get_E_RH_t_kx(time_min=time_min, time_max=time_max)
-                phi2_k = np.average(E_RH_t_kx[:,RH_kx>0], weights=np.gradient(RH_time), axis=0)*2
-                k      = RH_kx[      RH_kx>0]
-                phi2_k_stddev = np.zeros_like(phi2_k)
-
-            else:
-                if not zonal_stationary:
-                    if W_instead_of_phi:
-                        phi2_t_kx_ky, time, kx, ky = dataObj.read_W_spectra(time_min=time_min, time_max=time_max)
-                    else:
-                        phi2_t_kx_ky, time, kx, ky = dataObj.read_phi2_spectra(time_min=time_min, time_max=time_max)
-
-                    delta_kx = kx[1]-kx[0]
-                    delta_ky = ky[1]-ky[0]
-
-                    phi2_t_kx_ky[np.isnan(phi2_t_kx_ky)]=0
-
-                    if delta_t_avg is None:
-                        phi2_kx_ky = phi2_t_kx_ky[-1]
-                        phi2_kx_ky_stddev = np.zeros_like(phi2_kx_ky)
-                        print("Evaluating at t = %.2f" % (time[-1]))
-                    else:
-                        phi2_kx_ky = np.average(    phi2_t_kx_ky, weights=np.gradient(time), axis=0)
-                        phi2_kx_ky_stddev = np.std( phi2_t_kx_ky,                            axis=0)
-
-                    if plot_kx:
-
-                        if only_zonal:
-                            phi2_kx_ky[:,1:] = 0
-                            phi2_kx_ky[0,0]  = 0
-                            phi2_kx_ky_stddev[:,1:] = 0
-                            phi2_kx_ky_stddev[0,0]  = 0
-                            kx = np.array(kx)
-                            phi2_kx_ky = phi2_kx_ky[kx > 0, :]
-                            phi2_kx_ky_stddev = phi2_kx_ky_stddev[kx > 0, :]
-                            #phi2_kx_ky = phi2_kx_ky[kx > 0, :]
-                            kx = kx[kx>0]
-                            
-                        if remove_zonal:
-                            phi2_kx_ky[:,0]  = 0
-                            phi2_kx_ky_stddev[:,0]  = 0
-
-
-                        phi2_k = np.sum( phi2_kx_ky, axis=1)
-                        phi2_k_stddev = np.sum( phi2_kx_ky_stddev, axis=1)
-                        idx_sort = np.argsort(kx)
-                        k = kx[idx_sort]
-                        phi2_k = phi2_k[idx_sort]
-                        phi2_k_stddev = phi2_k_stddev[idx_sort]
-                        k = np.abs(k)
-#                        print("phi2(kx=0) = %e" % (phi2_k[0]))
-#                        phi2_k = phi2_k[k>0]
-#                        k = k[k>0]
-
-                    else:
-                        phi2_k = np.sum( phi2_kx_ky[:,1:], axis=0)
-                        phi2_k_stddev = np.sum( phi2_kx_ky_stddev[:,1:], axis=0)
-                        k = ky[1:]
-
-                # Stationary zonal flows
-                else:
-                    omega, kx, EZ_omega_kx = dataObj.get_EZ_omega_kx(quantity="phi", time_min=-delta_t_avg)
-                    #phi2_k = np.sum(EZ_omega_kx[:, kx>0], axis=0)*2
-                    k = kx[kx>0]
-                    #phi2_k = EZ_omega_kx[0, kx>0]*2
-                    phi2_k = EZ_omega_kx[0, kx>0]*2/k**2
-
-            # multiply phi2_k with k power if desired
-            phi2_k = phi2_k * k**(k_exp)
-            phi2_k_stddev = phi2_k_stddev * k**(k_exp)
-
-            if scale_kmin:
-                print("Rescaling phi2 with kmin (to be able to compare sims with different x0,y0)")
-                phi2_k = phi2_k / np.abs(k[1]-k[0])
-                phi2_k_stddev = phi2_k_stddev / np.abs(k[1]-k[0])
-
-            # Save data to file
-            np.savetxt(filename_data, (phi2_k, k))
-            np.savetxt(filename_data[:-4]+"_stddev.dat", (phi2_k_stddev, k))
+        k, phi2_k, phi2_k_stddev = get_phi_k_spectrum(
+            single_run, plot_kx, time_idx=time_idx, time_avg=time_avg, only_zonal=only_zonal,
+            remove_zonal=remove_zonal, scale_kmin=scale_kmin, k_exp=k_exp,
+            W_instead_of_phi=W_instead_of_phi, zonal_stationary=zonal_stationary,
+            plot_RH_phi_spectrum=plot_RH_phi_spectrum,
+        )
 
         ### RESCALE DATA
         if tprim_norm_list is not None:
             try:
-                aspectratio = dataObj.aspect_ratio
+                aspectratio = single_run.aspect_ratio
                 print("Aspect ratio = %.2f" % (aspectratio))
-            except:
-                aspectratio = 2.778
-                print("Setting aspect ratio to %.2f" % (aspectratio))
+            except AttributeError:
+                # No geometry file was readable at all for this run (see
+                # io.run.StellaRun.__init__) -- same unverified placeholder
+                # used there for the Miller-geometry-but-unparseable case,
+                # reused here so this doesn't silently drift to a
+                # different guess.
+                aspectratio = FALLBACK_ASPECT_RATIO
+                print("Setting aspect ratio to placeholder %.2f (no geometry file readable)" % (aspectratio))
 
             try:
                 safetyfactor = qinp_norm_list[i]
@@ -305,30 +314,6 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
 
             kappa  = tprim_norm_list[i]*aspectratio
             print("A = %.4f, kappa = %.4f, q = %.4f" % (aspectratio, kappa, safetyfactor))
-            #phi2_k = phi2_k / np.abs(safetyfactor**3 * kappa**5)
-            #k      = k[:] * np.abs(safetyfactor*kappa)
-            #phi2_k = phi2_k / np.abs(safetyfactor**(2/3) * kappa**(8/3))
-            #k      = k[:]
-
-            #alpha_kx_O = -1/2
-            #alpha_kx_O = 1  # isotropy perpendicular to B
-            #alpha_kx_O = 0  # cut-off at kx ~ 1
-            #print("alpha_k_O = %.2f" % (alpha_kx_O))
-            #print("beta_k_O = %.2f"  % (beta_kx_O))
-            #kx_O = (safetyfactor*kappa)**(-alpha_kx_O)
-            #kx_O_phi = (safetyfactor*kappa)**(-beta_kx_O)
-            #phi2_k = phi2_k / np.abs(safetyfactor**(2/3) * kappa**(8/3) * kx_O_phi**(-7/3))
-            #k      = k[:]/kx_O
-
-            #k = k*np.sqrt(kappa)
-            #phi2_k = phi2_k / (kappa**(7/2))
-
-#                if plot_kx:
-#                    k = k*np.sqrt(kappa)
-#                    phi2_k = phi2_k / (kappa**(7/2))
-#                else:
-#                    k = k*kappa
-#                    phi2_k = phi2_k / (kappa**(4))
 
             if scaling_theory == "CB":
                 k = k*kappa*safetyfactor
@@ -336,13 +321,9 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
 
             elif scaling_theory == "GCB":
                 if plot_kx:
-#                        k = k*safetyfactor**0.5
-#                        phi2_k = phi2_k / (kappa**2 * safetyfactor**1)
                      k = k*safetyfactor
                      phi2_k = phi2_k / (kappa**2 * safetyfactor**3)
                 else:
-#                        k = k*kappa*safetyfactor
-#                        phi2_k = phi2_k / (kappa**3 * safetyfactor**2)
                     k = k*kappa*safetyfactor
                     phi2_k = phi2_k / (kappa**3 * safetyfactor**3)
 
@@ -383,17 +364,12 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
                     else:
                         kexp_alphaD = 1/2
                         phi2exp_alphaD = 3/2
-                    #kexp_alphaD = 2/3
-                    #phi2exp_alphaD = 5/3
             else:
                 kexp_alphaD = 0
                 phi2exp_alphaD = 1
 
             phi2_k = phi2_k / (norm**(phi2exp_alphaD))
             k = k*norm**(kexp_alphaD)
-
-            #k = k*np.sqrt(norm)
-            #phi2_k = phi2_k / (norm**2)
 
         if scale_fac_vals is not None:
             phi2_k = phi2_k*scale_fac_vals[i]
@@ -430,69 +406,13 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
             ax.set_ylabel(r"$\alpha$")
         else:
             ax.loglog(k[np.abs(k)>0], phi2_k[np.abs(k)>0], label=label, ls=ls, marker=marker, color=color, lw=lw, markersize=markersize, alpha=alpha_plot)
-            #print(np.trapz(y=phi2_k[(np.abs(k)>0.3) & , x=
-#                idx_k_max = np.argmin(np.abs(phi2_k-phi2_k.max()))
-#                ax.scatter([k[idx_k_max]], [phi2_k[idx_k_max]], marker=marker, color=color, s=200)
-#            if plot_kx:
-#                plt.xscale('symlog', linthresh=kx[1]-kx[0])
 
-        if not plot_alpha_spectrum:
-            if i == len(run.list_dataObj)-1:
-                # Plot theoretical -7/3 scaling (Barnes et al. 2011)
-                idx_phi2_max = np.argmax(phi2_k[1:]) + 1
-                k_plot = np.linspace(1,10,10)*k[idx_phi2_max]
-#                    if only_zonal and plot_RH_phi_spectrum:
-#                        phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-4)
-#                        ax.plot(k_plot, phi2_k_theory, c='0.5', ls=':')
-#                        phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-2)
-#                        ax.plot(k_plot, phi2_k_theory, c='0.5', ls=':')
-
-#                    if not only_zonal:
-#                        if plot_kx:
-#                            phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-7/3)
-#                            ax.plot(k_plot*20, phi2_k_theory, c='0.5', lw=4)
-#                            ax.text(k_plot[2]*3, phi2_k_theory[2]*20, r"$\sim k^{-7/3}$", c='0.5')
-#                            #ax.text(k_plot[2]*20.2, phi2_k_theory[2], r"$\sim k^{-7/3}$", c='0.5')
-#                    #        phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-2)
-#                    #        ax.plot(k_plot*20, phi2_k_theory, c='0.5', lw=4)
-#                    #        ax.text(k_plot[2]*20.2, phi2_k_theory[2], r"$\sim k^{-2}$", c='0.5')
-#                            phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-1)
-#                            ax.plot(k_plot, 8*phi2_k_theory, ls='-', c='0.5', label=r"$\sim k^{-1}$", lw=4)
-#                            #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-1/2)
-#                            #ax.plot(k_plot/3, 4*phi2_k_theory, ls='--', c='g', label=r"$\sim k^{-1/2}$", lw=4)
-#                            #idx_min = np.argmin(k)
-#                            #k_plot = np.linspace(1,3,100)*k[idx_min+1]
-#                            #phi2_k_theory = phi2_k[idx_min+1]*np.ones_like(k_plot)
-#                            #ax.plot(k_plot, phi2_k_theory, ls='--', c='g', label=r"$\sim k^{0}$", lw=4)
-#                        else:
-#                            phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-7/3)
-#                            ax.plot(k_plot*10, phi2_k_theory, c='0.5', lw=4)
-#                            ax.text(k_plot[2]*1.5, phi2_k_theory[2]*20, r"$\sim k^{-7/3}$", c='0.5')
-#                            #ax.text(k_plot[2]*10.1, phi2_k_theory[2], r"$\sim k^{-7/3}$", c='0.5')
-#                            #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-3)
-#                            #ax.plot(k_plot*10, phi2_k_theory, c='0.5', lw=4)
-#                            #ax.text(k_plot[2]*10.1, phi2_k_theory[2], r"$\sim k^{-3}$", c='0.5')
-#                            #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-5/3)
-#                            #ax.plot(k_plot*10, phi2_k_theory, c='0.5', lw=4)
-#                            #ax.text(k_plot[2]*10.1, phi2_k_theory[2], r"$\sim k^{-5/3}$", c='0.5')
-#
-#                            #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-5/3)
-#                            #ax.plot(k_plot/4, 10*phi2_k_theory, ls='--', c='g', label=r"$\sim k^{-5/3}$", lw=4)
-#                            #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-4/3)
-#                            #ax.plot(k_plot/4, 10*phi2_k_theory, ls='--', c='g', label=r"$\sim k^{-4/3}$", lw=4)
-#                            #k_plot = np.linspace(1,3,100)*k[0]
-#                            #phi2_k_theory = phi2_k[0]*(k_plot/k_plot[0])
-#                            #ax.plot(k_plot, phi2_k_theory, ls='--', c='g', label=r"$\sim k^{1}$", lw=4)
-#                        #phi2_k_theory = phi2_k[idx_phi2_max] * (k_plot/k[idx_phi2_max])**(-1/2)
-#                        #ax.plot(k_plot, phi2_k_theory, ls='--', c='g', label=r"$\sim k^{-1/2}$")
-##                    if only_zonal:
-##                        phi2_k_theory = phi2_k[idx_phi2_max]*2 * (k_plot/k[idx_phi2_max])**(-10/3)
-##                        ax.plot(k_plot, phi2_k_theory, ls='--', c='g', label=r"$\sim k^{-10/3}$")
-
-#        if W_instead_of_phi:
-#            ylabel_base = r"$W$"
-#        else:
-#            ylabel_base = r"$\Phi^2$"
+    # NOTE: the "Z_i e ... T_i" part of ylabel_base below stays hardcoded
+    # to the ion symbol regardless of species -- a pre-existing,
+    # out-of-scope notational assumption (this whole normalization is
+    # implicitly ion-referenced); only the rho subscript (the actual
+    # gyroradius normalization the axis is in) is made species-aware here.
+    rho_label = get_rho_label(run.list_runs[0].ncdata) if run.list_runs else r"\rho"
 
     if plot_kx:
         if plot_alpha_spectrum:
@@ -502,16 +422,16 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
                 ylabel_base = r"$W_{k_x}$"
             else:
                 if remove_zonal:
-                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi^\mathrm{NZ}_{k_x}}{T_i} \frac{R}{\rho_i}\right)^2$"
+                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi^\mathrm{NZ}_{k_x}}{T_i} \frac{R}{%s}\right)^2$" % rho_label
                     #ylabel_base = r"$(e_i\delta\varphi^\mathrm{NZ}_{k_x}/T_i\; R/\rho_i)^2$"
                 elif only_zonal:
-                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi^\mathrm{Z}_{k_x}}{T_i} \frac{R}{\rho_i}\right)^2$"
+                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi^\mathrm{Z}_{k_x}}{T_i} \frac{R}{%s}\right)^2$" % rho_label
                     #ylabel_base = r"$(e_i\delta\varphi^\mathrm{Z}_{k_x}/T_i\; R/\rho_i)^2$"
                 else:
-                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi_{k_x}}{T_i} \frac{R}{\rho_i}\right)^2$"
+                    ylabel_base = r"$\left(\frac{Z_i e\delta\varphi_{k_x}}{T_i} \frac{R}{%s}\right)^2$" % rho_label
                     #ylabel_base = r"$(e_i\delta\varphi_{k_x}/T_i\; R/\rho_i)^2$"
                 #ylabel_base = r"$\Phi_{k_x}^2$"
-        xlabel = r"$k_x \rho_i$"
+        xlabel = r"$k_x %s$" % rho_label
         #xlabel = r"$|k_x| \rho_i$"
     else:
         if plot_alpha_spectrum:
@@ -520,10 +440,10 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
             if W_instead_of_phi:
                 ylabel_base = r"$W_{k_y}$"
             else:
-                ylabel_base = r"$\left(\frac{Z_i e\delta\varphi_{k_y}}{T_i} \frac{R}{\rho_i}\right)^2$"
+                ylabel_base = r"$\left(\frac{Z_i e\delta\varphi_{k_y}}{T_i} \frac{R}{%s}\right)^2$" % rho_label
                 #ylabel_base = r"$(e_i\varphi_{k_y}/T_i\; R/\rho_i)^2$"
                 #ylabel_base = r"$\Phi_{k_y}^2$"
-        xlabel = r"$k_y \rho_i$"
+        xlabel = r"$k_y %s$" % rho_label
 
     #if delta_t_avg is not None:
     #    ylabel_base = r"$\langle$" + ylabel_base + r"$\rangle_{\Delta t = %i}$" % (delta_t_avg)
@@ -587,6 +507,17 @@ def plot_phi_k_spectrum(run, plot_kx, fig=None, ax=None, time_idx=-2, ls_list=No
         ax.set_ylabel(ylabel)
 #        plt.gca().xaxis.grid(True, which='minor')
 #        plt.gca().yaxis.grid(True, which='minor')
+
+    # x is always log-scale here (loglog or semilogx) -- when the plotted
+    # k range spans less than a decade, matplotlib's default LogLocator
+    # labels every minor tick (2x, 3x, 4x, ... per decade), which overlap
+    # into an unreadable smear on a narrow-aspect figure. Capping the
+    # number of major ticks and dropping minor-tick labels keeps the axis
+    # legible regardless of how narrow the k range or figure is.
+    ax.xaxis.set_major_locator(mticker.LogLocator(base=10, numticks=6))
+    ax.xaxis.set_minor_locator(mticker.LogLocator(base=10, subs=np.arange(2, 10) * 0.1, numticks=6))
+    ax.xaxis.set_minor_formatter(mticker.NullFormatter())
+
     ax.grid()
 
     #return fig, ax, time
@@ -598,10 +529,10 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
     if ax is None:
         fig, ax = plt.subplots(nrows=1,ncols=1, figsize=(10,8))
 
-    for i, dataObj in enumerate(run.list_dataObj):
+    for i, single_run in enumerate(run.list_runs):
 
-        #if dataObj.code == "stella":
-        qflx_t_zed_kx_ky, time, zed, kx, ky = dataObj.read_flux_spectra(species_idx=species_idx, tube=tube)
+        #if single_run.code == "stella":
+        qflx_t_zed_kx_ky, time, zed, kx, ky = single_run.read_flux_spectra(species_idx=species_idx, tube=tube)
         delta_kx = kx[1]-kx[0]
         delta_ky = ky[1]-ky[0]
 
@@ -611,7 +542,7 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
             qflx_zed_kx_ky = np.average( qflx_t_zed_kx_ky[time > time[time_idx]-delta_t_avg], axis=0)
 
         if zed_val is None:
-            dl_over_B_avg = dataObj.dl_over_B_avg()
+            dl_over_B_avg = single_run.dl_over_B_avg()
             qflx_kx_ky = np.sum( dl_over_B_avg[:,None,None] * qflx_zed_kx_ky, axis=0)
         else:
             zed_idx = np.argmin( np.abs( zed[:] - zed_val ) )
@@ -622,28 +553,17 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
             idx_sort = np.argsort(kx)
             k = kx[idx_sort]
             qflx_k = qflx_k[idx_sort]
-#                    #    k = np.abs(kx)
         else:
-        #    qflx_k = qflx_k[k>0]
-        #    k = k[k>0]
             qflx_k = np.sum( qflx_kx_ky, axis=0)
             k = ky
 
-        #elif dataObj.code == "GX":
-        #    if plot_kx:
-        #        qflx_kx = dataObj.ncdata['Spectra']['Qkxst'][-1,0,:] / 2**(3/2)
-        #        kx      = dataObj.ncdata.variables['kx'][:]
-        #        idx_sort = np.argsort(kx)
-        #        k = kx[idx_sort]
-        #        qflx_k = qflx_kx[idx_sort]
-        #    else:
-        #        qflx_k  = dataObj.ncdata['Spectra']['Qkyst'][-1,0,:] / 2**(3/2)
-        #        k       = dataObj.ncdata.variables['ky'][:]
-        #else:
-        #    print("WARNING! Invalid code entered.")
+        # NOTE: GX support existed here (reading single_run.ncdata['Spectra']
+        # ['Qkxst'/'Qkyst']) and was disabled at some point -- this function
+        # is dead code (not called by any driver) so it was left as-is
+        # rather than restored.
 
         if scale_k and zed_idx is not None:
-            _, _, gds2, _, gds22, _ = dataObj.get_FLR()
+            _, _, gds2, _, gds22, _ = single_run.get_FLR()
             if plot_kx:
                 k = k*np.sqrt(gds22[zed_idx])
             else:
@@ -652,22 +572,6 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
         if scale_kmin:
             print("Rescaling Q with kmin (to be able to compare sims with different x0,y0)")
             qflx_k = qflx_k / np.abs(k[1]-k[0])
-
-#            # Determine maxima of Q(k)
-#            print("\nFor " + run.filenames_base[i] + ", k at which Q=Qmax (local) is:")
-#            Nr_comp = 4
-#            for i_k in range(len(k)-Nr_comp):
-#                i_count = int(i_k+Nr_comp/2)
-#                is_local_max = True
-#                for i_comp in range(int(Nr_comp/2)):
-#                    if qflx_k[i_count] < qflx_k[i_count+i_comp] or qflx_k[i_count] < qflx_k[i_count-i_comp]:
-#                        is_local_max = False
-#                        continue
-#                if is_local_max:
-#                    print("k = %e" % (k[i_count]))
-#
-#            ## Check
-#            #print("Qflx(t=%e) = %e" % (time[time_idx], np.sum(qflx_k)))
 
         # Evaluate and print integrated heat flux for some kfilter_vals
         if kfilter_vals is not None:
@@ -698,37 +602,23 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
 
         ax.loglog(k, qflx_k, label=run.list_labels[i], ls=ls, marker=marker, color=color)
 
-        if i == len(run.list_dataObj)-1:
+        if i == len(run.list_runs)-1:
             # Plot theoretical -7/3 scaling (Barnes et al. 2011)
             idx_Q_max = np.argmax(qflx_k[1:]) + 12
             k_plot = np.linspace(1,10,10)*k[1+idx_Q_max]
             if plot_kx:
                 qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-7/3)
-                #ax.plot(k_plot*2, qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-7/3}$", lw=4)
-                #qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-1)
-                #ax.plot(k_plot/3, 4*qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-1}$", lw=4)
-                ##qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-1/2)
-                ##ax.plot(k_plot/3, 4*qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-1/2}$", lw=4)
-                #idx_min = np.argmin(k)
-                #k_plot = np.linspace(1,3,100)*k[idx_min+1]
-                #qflx_k_theory = qflx_k[idx_min+1]*np.ones_like(k_plot)
-                #ax.plot(k_plot, qflx_k_theory, ls='--', c='g', label=r"$\sim k^{0}$", lw=4)
             else:
                 qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-4/3)
                 ax.plot(k_plot/4, qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-4/3}$", lw=4)
-                #qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-5/3)
-                #ax.plot(k_plot/4, 10*qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-5/3}$", lw=4)
-                #qflx_k_theory = qflx_k[idx_Q_max] * (k_plot/k[idx_Q_max])**(-4/3)
-                #ax.plot(k_plot/4, 10*qflx_k_theory, ls='--', c='g', label=r"$\sim k^{-4/3}$", lw=4)
-                #k_plot = np.linspace(1,3,100)*k[0]
-                #qflx_k_theory = qflx_k[0]*(k_plot/k_plot[0])**2
-                #ax.plot(k_plot, qflx_k_theory, ls='--', c='g', label=r"$\sim k^{2}$", lw=4)
- 
+
+    rho_label = get_rho_label(run.list_runs[0].ncdata) if run.list_runs else r"\rho"
+
     if plot_kx:
         ylabel_base = r"$Q_{k_x}$"
         if plot_k_qk:
             ylabel_base += r"$k_x$"
-        xlabel = r"$k_x \rho_i$"
+        xlabel = r"$k_x %s$" % rho_label
         if scale_k:
             xlabel = xlabel + r"$|\nabla x|$"
         #xlabel = r"$|k_x| \rho_i$"
@@ -736,7 +626,7 @@ def plot_Q_k_spectrum(run, plot_kx, species_idx=0, tube=0, fig=None, ax=None, ti
         ylabel_base = r"$Q_{k_y}$"
         if plot_k_qk:
             ylabel_base += r"$k_y$"
-        xlabel = r"$k_y \rho_i$"
+        xlabel = r"$k_y %s$" % rho_label
         if scale_k:
             xlabel = xlabel + r"$|\nabla y|$"
 

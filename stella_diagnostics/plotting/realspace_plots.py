@@ -13,7 +13,8 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
-from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
+from stella_diagnostics.io.codes import get_rho_label, get_vt_label
+from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax, resolve_vmin_vmax
 from stella_diagnostics.quantities.labels import get_quantity_label
 
 
@@ -156,7 +157,7 @@ def plot_quantity_3d_torus(run, quantity="phi", fig=None, ax=None, species_idx=0
         title = title+r"$_\mathrm{NZ}$"
     if only_zonal:
         title = title+r"$_\mathrm{Z}$"
-    title = title+r"$(t v_{Ti}/a=%.2f)$" % (time_eval)
+    title = title+r"$(t %s/a=%.2f)$" % (get_vt_label(run.ncdata), time_eval if np.ndim(time_eval) == 0 else time_eval[-1])
 
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
@@ -166,14 +167,14 @@ def plot_quantity_3d_torus(run, quantity="phi", fig=None, ax=None, species_idx=0
     return fig, ax, vmin, vmax
 
 
-def plot_quantity_poloidal_ring(run, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, vmin=None, vmax=None, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, rorigin_fac=2, zed_idx_skip=1, kyfilter_fac=None, kymin_filter=np.inf):
+def plot_quantity_poloidal_ring(run, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, vmin=None, vmax=None, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, rorigin_fac=2, zed_idx_skip=1, kyfilter_fac=None, ky_lowpass_cutoff=np.inf):
 
     if kyfilter_fac is not None:
         ky = run.ncdata['ky'][:]
-        kymin_filter = ky[1]*kyfilter_fac*0.9999
-        print(kymin_filter)
+        ky_lowpass_cutoff = ky[1]*kyfilter_fac*0.9999
+        print(ky_lowpass_cutoff)
 
-    quantity_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kymin_filter=kymin_filter)
+    quantity_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, ky_lowpass_cutoff=ky_lowpass_cutoff)
 
     fig, ax = get_or_create_ax(fig, ax, figsize=(12,10), subplot_kw=dict(projection='polar'))
 
@@ -238,7 +239,7 @@ def plot_quantity_poloidal_ring(run, quantity="phi", fig=None, ax=None, species_
         title = title+r"$_\mathrm{NZ}$"
     if only_zonal:
         title = title+r"$_\mathrm{Z}$"
-    title = title+r"$(t=%.2f)$" % (time_eval)
+    title = title+r"$(t=%.2f)$" % (time_eval if np.ndim(time_eval) == 0 else time_eval[-1])
 
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
@@ -248,9 +249,9 @@ def plot_quantity_poloidal_ring(run, quantity="phi", fig=None, ax=None, species_
     return fig, ax, im, vmin, vmax
 
 
-def plot_quantity_box_zed_x_y(run, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, zed_neg=True):
+def plot_quantity_box_zed_x_y(run, quantity="phi", fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, zed_neg=True):
 
-    quantity_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
+    quantity_zed_x_y, zed, x, y, time_eval = run.get_quantity_zed_x_y(quantity=quantity, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
 
     if ax is None:
         fig = plt.figure(figsize=(12,9))
@@ -326,23 +327,24 @@ def plot_quantity_box_zed_x_y(run, quantity="phi", fig=None, ax=None, species_id
         title = title+r"$_\mathrm{NZ}$"
     if only_zonal:
         title = title+r"$_\mathrm{Z}$"
-    title = title+r"$(t=%.2f)$" % (time_eval)
+    title = title+r"$(t=%.2f)$" % (time_eval if np.ndim(time_eval) == 0 else time_eval[-1])
 
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
 
     #ax.set_title(title)
+    rho_label = get_rho_label(run.ncdata)
     ax.set_xlabel("\n\n"+r"$\zeta$")
-    ax.set_ylabel("\n"+r"$x/\rho_i$")
-    ax.set_zlabel(r"$y/\rho_i$")
+    ax.set_ylabel("\n"+r"$x/%s$" % rho_label)
+    ax.set_zlabel(r"$y/%s$" % rho_label)
     fig.suptitle(title)
 
     return fig, ax, im, vmin, vmax
 
 
-def plot_quantity_x_y(run, quantity="phi", fig=None, ax=None, zed_val=None, zed_idx=None, mult_zed=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, show_iota_x=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kxmin_filter=np.inf, kymin_filter=np.inf, kxmax_filter=-1, kymax_filter=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, interpolation=False, projection_3d=False, plot_contours=False, suptitle=True, xy_layout=True):
+def plot_quantity_x_y(run, quantity="phi", fig=None, ax=None, zed_val=None, zed_idx=None, mult_zed=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, show_iota_x=False, kx_order=0, ky_order=0, time_avg=None, nx=None, ny=None, symm=False, vmin=None, vmax=None, kx_lowpass_cutoff=np.inf, ky_lowpass_cutoff=np.inf, kx_highpass_cutoff=-1, ky_highpass_cutoff=-1, cmap=None, xmin=None, xmax=None, ymin=None, ymax=None, interpolation=False, projection_3d=False, plot_contours=False, suptitle=True, xy_layout=True):
 
-    quantity_x_y, x, y, time_eval = run.get_quantity_x_y(quantity=quantity, zed_val=zed_val, zed_idx=zed_idx, mult_zed=mult_zed, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kxmin_filter=kxmin_filter, kymin_filter=kymin_filter, kxmax_filter=kxmax_filter, kymax_filter=kymax_filter)
+    quantity_x_y, x, y, time_eval = run.get_quantity_x_y(quantity=quantity, zed_val=zed_val, zed_idx=zed_idx, mult_zed=mult_zed, species_idx=species_idx, time_val=time_val, time_idx=time_idx, remove_zonal=remove_zonal, only_zonal=only_zonal, kx_order=kx_order, ky_order=ky_order, time_avg=time_avg, ny=ny, nx=nx, kx_lowpass_cutoff=kx_lowpass_cutoff, ky_lowpass_cutoff=ky_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, ky_highpass_cutoff=ky_highpass_cutoff)
 
     if ax is None:
         if projection_3d:
@@ -366,7 +368,11 @@ def plot_quantity_x_y(run, quantity="phi", fig=None, ax=None, zed_val=None, zed_
     X, Y = np.meshgrid(x, y)
     Z    = quantity_x_y.T
 
-    if symm or vmin == "symm":
+    # NOTE: no real caller passes vmin="symm" here (unlike plot_quantity_x_t/
+    # plot_quantity_x_zed/plot_contour_gvmu_vpa, where that string sentinel
+    # is the actual convention) -- every caller of this function uses the
+    # symm=True kwarg instead, so that's kept as the sole mechanism here.
+    if symm:
         vmax = (np.abs(Z)).max()
         vmin = -vmax
 
@@ -438,23 +444,29 @@ def plot_quantity_x_y(run, quantity="phi", fig=None, ax=None, zed_val=None, zed_
         title = title+r"$_\mathrm{NZ}$"
     if only_zonal:
         title = title+r"$_\mathrm{Z}$"
-    title = title+r"$(t=%.2f$ $a/v_T)$" % (time_eval)
+    # time_eval is array-valued whenever a time_avg window was resolved
+    # (not just a single reference point) -- show its last (trailing-
+    # window-end) value in the title rather than crashing on
+    # "%.2f" % array.
+    time_eval_title = time_eval if np.ndim(time_eval) == 0 else time_eval[-1]
+    title = title+r"$(t=%.2f$ $a/%s)$" % (time_eval_title, get_vt_label(run.ncdata))
 
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
 
     #ax.set_title(title)
+    rho_label = get_rho_label(run.ncdata)
     if projection_3d:
-        ax.set_xlabel("\n"+r"$x/\rho_i$")
-        ax.set_ylabel("\n"+r"$y/\rho_i$")
+        ax.set_xlabel("\n"+r"$x/%s$" % rho_label)
+        ax.set_ylabel("\n"+r"$y/%s$" % rho_label)
         ax.set_zlabel("\n"+title)
     else:
         if xy_layout:
-            ax.set_xlabel(r"$x/\rho_i$")
-            ax.set_ylabel(r"$y/\rho_i$")
+            ax.set_xlabel(r"$x/%s$" % rho_label)
+            ax.set_ylabel(r"$y/%s$" % rho_label)
         else:
-            ax.set_xlabel(r"$y/\rho_i$")
-            ax.set_ylabel(r"$x/\rho_i$")
+            ax.set_xlabel(r"$y/%s$" % rho_label)
+            ax.set_ylabel(r"$x/%s$" % rho_label)
         if suptitle:
             fig.suptitle(title)
 
@@ -474,16 +486,16 @@ def plot_Q_x_y(run, fig=None, ax=None, zed_idx=None, time_idx=-1, species_idx=0,
 
     ax.set_xlabel(r"$x$")
     ax.set_ylabel(r"$y$")
-    ax.set_title(r"$Q(t=%.2f)$" % (time_eval))
+    ax.set_title(r"$Q(t=%.2f)$" % (time_eval if np.ndim(time_eval) == 0 else time_eval[-1]))
 
     ax.set_aspect('equal')
 
     return fig, ax, im
 
 
-def plot_quantity_x(run, quantity="phi", species_idx=0, fig=None, ax=None, zed_idx=None, time_idx=-1, label=None, ls=None, color=None, marker=None, normalise=False, time_avg=None, nx=None, mult_zed=None, kx_order=0, kxmin_filter=1e5, mult=1, plot_factor=1):
+def plot_quantity_x(run, quantity="phi", species_idx=0, fig=None, ax=None, zed_idx=None, time_idx=-1, label=None, ls=None, color=None, marker=None, normalise=False, time_avg=None, nx=None, mult_zed=None, kx_order=0, kx_lowpass_cutoff=1e5, mult=1, plot_factor=1):
 
-    f_Z,       x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kxmin_filter=kxmin_filter)
+    f_Z,       x, _, time_eval = run.get_quantity_x_y(quantity=quantity, species_idx=species_idx, zed_idx=zed_idx, time_idx=time_idx, remove_zonal=False, only_zonal=True, kx_order=kx_order, time_avg=time_avg, nx=nx, mult_zed=mult_zed, kx_lowpass_cutoff=kx_lowpass_cutoff)
 
     # Make 1D array
     f_Z       = mult*f_Z[:,0]
@@ -497,7 +509,11 @@ def plot_quantity_x(run, quantity="phi", species_idx=0, fig=None, ax=None, zed_i
 
     fig, ax = get_or_create_ax(fig, ax, nrows=1, ncols=1, figsize=(8,5))
 
-    title = r"$t v_T/a = %.2f$" % (time_eval)
+    # time_eval is array-valued whenever a time_avg window was resolved --
+    # show its last (trailing-window-end) value rather than crashing on
+    # "%.2f" % array.
+    time_eval_title = time_eval if np.ndim(time_eval) == 0 else time_eval[-1]
+    title = r"$t %s/a = %.2f$" % (get_vt_label(run.ncdata), time_eval_title)
     if time_avg is not None:
         title = title + r"$_{\Delta t = %.1f}$" % (time_avg)
     fig.suptitle(title)
@@ -509,11 +525,11 @@ def plot_quantity_x(run, quantity="phi", species_idx=0, fig=None, ax=None, zed_i
     if label is not None:
         ax.legend()
 
-    ax.set_xlabel(r"$x/\rho_i$")
+    ax.set_xlabel(r"$x/%s$" % get_rho_label(run.ncdata))
     return fig, ax, norm_val, x, f_Z
 
 
-def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, time_idx_skip=1, normalise_each_t=False, y_val=None, cmap='inferno', kx_order=0, zed_val=None, zed_idx=None, mult_zed=None, time_min=0, time_max=1e10, nx=None, kxmin_filter=1e4, kxmax_filter=-1, par_der_order=0, scale_eps=1, return_avg=False, mult=1):
+def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, species_idx=0, logarithmic=False, remove_zonal=False, only_zonal=False, time_idx_skip=1, normalise_each_t=False, y_val=None, cmap='inferno', kx_order=0, zed_val=None, zed_idx=None, mult_zed=None, time_min=0, time_max=1e10, nx=None, kx_lowpass_cutoff=1e4, kx_highpass_cutoff=-1, par_der_order=0, scale_eps=1, return_avg=False, mult=1):
 
     time_all    =  run.get_time_array(GX_big=True)
     kx, ky, zed = run.get_kx_ky_zed()
@@ -529,7 +545,7 @@ def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, sp
     f_t_x_y = np.zeros( (len(time_idxs), nx, 2*len(ky)-1) )
     for i_idx, time_idx in enumerate(time_idxs):
         print("Evaluating time_idx %.6i/%i..." % (i_idx+1, len(time_idxs)), end="\r")
-        f_x_y, x, y, _ = run.get_quantity_x_y(quantity=quantity, remove_zonal=remove_zonal, only_zonal=only_zonal, time_idx=time_idx, kx_order=kx_order, zed_val=zed_val, zed_idx=zed_idx, mult_zed=mult_zed, nx=nx, kxmin_filter=kxmin_filter, kxmax_filter=kxmax_filter, par_der_order=par_der_order)
+        f_x_y, x, y, _ = run.get_quantity_x_y(quantity=quantity, remove_zonal=remove_zonal, only_zonal=only_zonal, time_idx=time_idx, kx_order=kx_order, zed_val=zed_val, zed_idx=zed_idx, mult_zed=mult_zed, nx=nx, kx_lowpass_cutoff=kx_lowpass_cutoff, kx_highpass_cutoff=kx_highpass_cutoff, par_der_order=par_der_order)
         f_t_x_y[i_idx] = f_x_y*mult
 
     if only_zonal:
@@ -542,23 +558,6 @@ def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, sp
     else:
         yval_idx = np.argmin( np.abs(y-y_val) )
         f_t_x = f_t_x_y[:,:,yval_idx]
- 
-#        f_t_zed_kx_ky = f_t_zed_kx_ky_ri[::time_idx_skip,:,:,:,0] + 1j*f_t_zed_kx_ky_ri[::time_idx_skip,:,:,:,1]
-
-#        # Filter zonal if requested
-#        if remove_zonal:
-#            f_t_zed_kx_ky[:,:,:,0]= 0
-#        if only_zonal:
-#            f_t_zed_kx_ky[:,:,:,1:]= 0
-#
-#        # Average in zed
-#        dl_over_B_avg = run.dl_over_B_avg()
-#        f_t_kx_ky = np.sum(f_t_zed_kx_ky * dl_over_B_avg[None,:,None,None], axis=1)
-#
-#        # FT in kx, sum over ky
-#        x = np.fft.fftshift(np.fft.fftfreq(len(kx),d=(kx[1]-kx[0])/(2*np.pi)))
-#        f_t_x = np.sum( np.real(np.fft.ifft(f_t_kx_ky, axis=1)), axis=2)
-#        #f_t_x = np.sum( np.abs(np.fft.ifft(f_t_kx_ky, axis=1)), axis=2)
 
     time  = time*scale_eps
     f_t_x = f_t_x/scale_eps
@@ -574,28 +573,7 @@ def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, sp
         for time_idx in range(len(time)):
             Z[:,time_idx] = Z[:,time_idx]/max(np.abs(Z[:,time_idx]))
 
-#        if logarithmic and vmax == "auto":
-#            maxabs = np.abs(Z).max()
-#            vmax =  maxabs
-#            vmin = vmin*maxabs
-#        if vmin == "sym" or vmax == "auto":
-#            maxabs = np.abs(Z).max()
-#            vmin = -maxabs
-#            vmax =  maxabs
-#            cmap = 'coolwarm'
-#        if vmax is None:
-#            vmax = Z.max()
-#        if vmin is None:
-#            vmin = Z.min()
-    if vmax is None:
-        vmax = Z.max()
-    if vmax == "last":
-        vmax = np.abs(Z[:,-1]).max()
-    if vmin == "symm":
-        vmin = -vmax
-
-    #print(vmin)
-    #print(vmax)
+    vmin, vmax = resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax=Z.max(), fill_vmin_default=False)
 
     if logarithmic:
         im = ax.pcolormesh(X, Y, np.abs(Z), norm=colors.LogNorm(vmin=vmin, vmax=vmax), shading='auto', cmap=cmap)
@@ -607,11 +585,12 @@ def plot_quantity_x_t(run, quantity, fig=None, ax=None, vmin=None, vmax=None, sp
         ax.set_xlim([time[0], time[-1]])
         ax.set_ylim([x[0],    x[-1]])
 
+    vt_label = get_vt_label(run.ncdata)
     if scale_eps == 1:
-        ax.set_xlabel(r"$t v_T/a$")
+        ax.set_xlabel(r"$t %s/a$" % vt_label)
     else:
-        ax.set_xlabel(r"$t v_T/R$")
-    ax.set_ylabel(r"$x/\rho_i$")
+        ax.set_xlabel(r"$t %s/R$" % vt_label)
+    ax.set_ylabel(r"$x/%s$" % get_rho_label(run.ncdata))
 
     if return_avg:
         f_t_mean = np.mean(f_t_x, axis=1)

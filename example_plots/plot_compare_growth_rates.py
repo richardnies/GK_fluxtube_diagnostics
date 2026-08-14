@@ -33,4 +33,4 @@ for nfield_periods_val in config.nfield_periods_vals:
     scan.plot_omega_ky(axs=axs, label=r"$Nfp = $%i" % (nfield_periods_val))
 
 axs[0].legend()
-plt.savefig(getattr(config, "figname", "fig_comparison_growth_rates.png"))
+plt.savefig(getattr(config, "figname", "fig_comparison_growth_rates.pdf"))

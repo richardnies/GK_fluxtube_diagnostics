@@ -6,6 +6,7 @@ repeated at ~34 call sites across the plotting modules, and the
 ``sns.color_palette("coolwarm", n)`` boilerplate repeated in the
 Rosenbluth-Hinton plots.
 """
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -27,6 +28,32 @@ def get_or_create_ax(fig=None, ax=None, figsize=(12, 9), **subplot_kwargs):
 def coolwarm_palette(n):
     """``seaborn`` "coolwarm" palette with n colors."""
     return sns.color_palette("coolwarm", n)
+
+
+def resolve_vmin_vmax(Z, vmin, vmax, logarithmic, default_vmax, fill_vmin_default=True):
+    """Resolves the vmin/vmax sentinel values shared (up to small,
+    real per-caller differences) across the 2D pcolormesh plots in
+    zed_plots.py/realspace_plots.py/physics.velocity_space: ``vmax=None``
+    -> `default_vmax` (computed by the caller, since callers differ on
+    whether that's ``Z.max()`` or ``np.abs(Z).max()``); ``vmax="last"``
+    -> abs of the last time-column's max; ``vmin="symm"`` -> ``-vmax`` if
+    not logarithmic, else ``1e-2*vmax`` (a negative vmin is invalid for
+    LogNorm -- "symmetric" only means anything for a linear, divergent
+    colormap; for logarithmic it instead falls back to the same
+    fraction-of-vmax floor as the vmin=None case below); ``vmin=None`` ->
+    ``1e-2*vmax`` if logarithmic else ``Z.min()``, unless
+    `fill_vmin_default=False` (one caller leaves `vmin=None` as-is,
+    relying on matplotlib's own autoscale).
+    """
+    if vmax is None:
+        vmax = default_vmax
+    if vmax == "last":
+        vmax = np.abs(Z[:, -1]).max()
+    if vmin == "symm":
+        vmin = 1e-2*vmax if logarithmic else -vmax
+    elif vmin is None and fill_vmin_default:
+        vmin = 1e-2*vmax if logarithmic else Z.min()
+    return vmin, vmax
 
 
 def set_default_style(usetex=True, font_family="serif", font_size=24, axes_titlepad=15, **extra_rcparams):
