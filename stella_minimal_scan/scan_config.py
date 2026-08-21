@@ -9,6 +9,7 @@ any multi-run driver from inside this directory, e.g.:
     python3 ../example_plots/plot_contour_quantity_vs_kx_omega.py scan_config.py
     python3 ../example_plots/plot_contour_quantity_vs_t_x.py scan_config.py
     python3 ../example_plots/plot_param_scan_Dimits.py scan_config.py
+    python3 ../example_plots/plot_zonal_upar_vE_kx.py scan_config.py
 
 (gvmus_all_dirs.py, mean_quantities_x.py, mean_quantities_x_zed.py use
 scan_config_grid.py instead -- see that file's docstring for why.)
@@ -78,3 +79,7 @@ dirname_base = "."
 dirname_pattern = "run_tprim*"
 kx_order = 0
 only_zonal = True
+
+# --- plot_zonal_upar_vE_kx.py (flat dirnames, reused from above) ---
+kx_min = 0.0
+kx_max = 0.5

@@ -350,6 +350,7 @@ are just worked examples, not a fixed list.
 | `plot_compare_kx_rhoi.py` | `compare_kx_rhoi_default.py` | kx*rhoi(t) + scaling-vs-tprim comparison |
 | `plot_phiZ_TS_qkappa2.py` | `phiZ_TS_qkappa2_default.py` | E_zonal vs q*kappa^2 scaling |
 | `plot_RH_P_C_kx_from_file.py` | `rh_p_c_kx_default.py` | Collisional P_RH(kx)/(nu*E_RH) vs vnew x tprim |
+| `plot_zonal_upar_vE_kx.py` | `scan_config.py`* | E_RH(kx) (log) + zonal upar/vE and upar*cos(theta)/vE ratios vs kx, multi-run |
 | `plot_contour_quantity_vs_t_x.py` | `contour_quantity_x_t_P_RH_tot.py` | quantity(x, t) contour grid + Qflx/phi2 overlay |
 | `plot_flux_time.py` | `scan_nu_var.py`, `scan_upwind.py`, `scan_nu_var2.py` | Qflx(t)/E_phi(t)/E_upar(t) comparison |
 | `movie_gvmus_t.py` | `movie_gvmus_t_default.py` | Movie: g(vpa, mu) vs time, one run |
