@@ -277,6 +277,32 @@ def get_P_RH(run, species_idx="sum", passing_trapped="both", time_min=0, time_ma
     return P_RH_even_t_kx, P_RH_odd_t_kx, time, kx
 
 
+def get_P_RH_coll_over_vnew_E_RH_t(run, vnew=None, species_idx="sum", time_min=0, time_max=1e10, kx_max=1e5, idxs_kx=None):
+    """Collisional RH power transfer normalized by vnew*E_RH, vs time (summed
+    over kx) -- a dimensionless proxy for the instantaneous collisional
+    damping rate of the zonal flow: P_RH_coll ~ dE_RH/dt from collisions
+    alone, so P_RH_coll/E_RH is ~ a damping rate, and dividing by vnew
+    expresses it in units of the collision frequency (compare against
+    get_P_RH_coll_normalized_vs_kx in scan/rh_collisional_kx.py, which
+    does the analogous normalization for a single time-window mean vs kx
+    instead of this function's time-resolved, kx-summed view).
+
+    vnew defaults to this run's own species-summed collision frequency
+    (the 'vnew' netCDF variable written by stella), not a value from a
+    separate collisionality scan -- pass vnew explicitly to override.
+    """
+    if vnew is None:
+        vnew = float(np.sum(run.ncdata.variables['vnew'][:]))
+
+    E_RH_t_kx, time, kx_vals = run.get_E_RH_t_kx(species_idx=species_idx, time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx)
+    P_RH_coll_even_t_kx, P_RH_coll_odd_t_kx, time_p, kx_vals_p = run.get_P_RH(species_idx=species_idx, time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx, fphi=0, fapar=0, fbpar=0, fcoll=1)
+
+    E_RH_t = E_RH_t_kx.sum(axis=1)
+    P_RH_coll_t = (P_RH_coll_even_t_kx + P_RH_coll_odd_t_kx).sum(axis=1)
+
+    return P_RH_coll_t / (vnew * E_RH_t), time
+
+
 def plot_E_RH(run, fig=None, ax=None, time_min=0, time_max=1e10, idxs_kx=None, kx_max=1e5, colors=None):
 
     fig, ax = get_or_create_ax(fig, ax, nrows=1, ncols=1, figsize=(9,8))

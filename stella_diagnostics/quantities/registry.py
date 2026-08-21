@@ -102,6 +102,12 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
             f_zed_kx_ky_ri = run.ncdata.variables['density'][time_idx,species_idx,0,:,:,:,:]
         elif quantity=="qpar":
             f_zed_kx_ky_ri = run.ncdata.variables['qpar'][time_idx,species_idx,0,:,:,:,:]
+        elif quantity=="spitzer2":
+            # velocity_integral(g * vpa*(vpa^2+vperp2-5/2)) -- a parallel
+            # heat-flux-like moment (written whenever write_moments=.true.,
+            # no separate flag), exactly zero for any shifted Maxwellian --
+            # a clean order parameter for "distance from a drifting Maxwellian".
+            f_zed_kx_ky_ri = run.ncdata.variables['spitzer2'][time_idx,species_idx,0,:,:,:,:]
         elif quantity=="upar":
             # upar(t, species, tube, zed, kx, ky, ri)
             f_zed_kx_ky_ri = run.ncdata.variables['upar'][time_idx,species_idx,0,:,:,:,:]

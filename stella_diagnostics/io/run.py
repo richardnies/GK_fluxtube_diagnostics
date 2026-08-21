@@ -207,6 +207,9 @@ class StellaRun:
     def get_P_RH(self, species_idx='sum', passing_trapped='both', time_min=0, time_max=10000000000.0, time_idx_skip=1, kx_max=100000.0, idxs_kx=None, fphi=1, fapar=1, fbpar=1, fcoll=1):
         return physics_rosenbluth_hinton.get_P_RH(self, species_idx=species_idx, passing_trapped=passing_trapped, time_min=time_min, time_max=time_max, time_idx_skip=time_idx_skip, kx_max=kx_max, idxs_kx=idxs_kx, fphi=fphi, fapar=fapar, fbpar=fbpar, fcoll=fcoll)
 
+    def get_P_RH_coll_over_vnew_E_RH_t(self, vnew=None, species_idx='sum', time_min=0, time_max=10000000000.0, kx_max=100000.0, idxs_kx=None):
+        return physics_rosenbluth_hinton.get_P_RH_coll_over_vnew_E_RH_t(self, vnew=vnew, species_idx=species_idx, time_min=time_min, time_max=time_max, kx_max=kx_max, idxs_kx=idxs_kx)
+
     def plot_E_RH(self, fig=None, ax=None, time_min=0, time_max=10000000000.0, idxs_kx=None, kx_max=100000.0, colors=None):
         return physics_rosenbluth_hinton.plot_E_RH(self, fig=fig, ax=ax, time_min=time_min, time_max=time_max, idxs_kx=idxs_kx, kx_max=kx_max, colors=colors)
 
