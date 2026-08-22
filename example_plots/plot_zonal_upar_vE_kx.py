@@ -114,8 +114,24 @@ for i, dirname in enumerate(config.dirnames):
     else:
         time_idx_center = run.get_time_idx(time_val_avg)
         time_center = time_val_avg
-    time_min_win = max(0, time_center - time_avg / 2)
-    time_max_win = min(time_all[-1], time_center + time_avg / 2)
+    # Full-width (time_avg) window centered on time_center, SHIFTED (not
+    # merely clamped/shrunk) when that would run past either edge of the
+    # run's time range -- same convention as, and kept consistent with,
+    # quantities.realspace.get_quantity_zed_x_y/quantities.registry.
+    # get_quantity_zed_kx_ky (the upar/vE calls below), so E_RH is
+    # averaged over the same window width as the flow quantities instead
+    # of a naive clamp silently halving it whenever time_center sits at
+    # or near either edge (e.g. the implicit time_all[-1] reference used
+    # whenever time_val_avg is None).
+    time_min_win = time_center - time_avg / 2
+    time_max_win = time_center + time_avg / 2
+    if time_min_win < 0:
+        time_max_win += -time_min_win
+        time_min_win = 0
+    if time_max_win > time_all[-1]:
+        time_min_win -= (time_max_win - time_all[-1])
+        time_max_win = time_all[-1]
+    time_min_win = max(0, time_min_win)
 
     eps = eps_override if eps_override is not None else estimate_eps_from_bmag(run)
     q = float(run.ncdata.variables["q"].getValue())

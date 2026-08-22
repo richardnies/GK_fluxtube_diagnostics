@@ -53,16 +53,31 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
     kx, ky, zed = run.get_kx_ky_zed()
     time_all    = run.get_time_array(GX_big=True)
 
-    if time_avg is not None:
+    if time_val is not None:
+        time_idx = np.argmin( np.abs(time_all-time_val) )
+
+    if time_avg is not None and np.ndim(time_idx) == 0:
+        # Full-width (time_avg) window centered on time_eval, SHIFTED (not
+        # merely clamped/shrunk) when that would run past either edge of
+        # the run's time range -- same convention as, and kept consistent
+        # with, quantities.realspace.get_quantity_zed_x_y (see that
+        # function's own docstring for the full rationale: a naive clamp
+        # silently produces a half-width window whenever time_eval sits at
+        # or near either edge, e.g. the implicit time_all[-1] reference
+        # used whenever no explicit time_val is given).
         time_eval = time_all[time_idx]
-        time_min  = max(0,            time_eval-time_avg/2)
-        time_max  = min(time_all[-1], time_eval+time_avg/2)
+        time_min = time_eval - time_avg/2
+        time_max = time_eval + time_avg/2
+        if time_min < 0:
+            time_max += -time_min
+            time_min = 0
+        if time_max > time_all[-1]:
+            time_min -= (time_max - time_all[-1])
+            time_max = time_all[-1]
+        time_min = max(0, time_min)
         time_idx_min = np.argmin( np.abs(time_all-time_min) )
         time_idx_max = np.argmin( np.abs(time_all-time_max) )
         time_idx = np.arange(time_idx_min,time_idx_max+1)
- 
-    if time_val is not None:
-        time_idx = np.argmin( np.abs(time_all-time_val) )
 
     if not alt_slow_eval:
         if quantity=="phi":
