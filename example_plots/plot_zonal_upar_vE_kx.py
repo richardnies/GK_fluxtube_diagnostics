@@ -18,6 +18,17 @@ component) and E_RH is identically 0 there (Gamma0=1 at kx=0), matching
 the same `if kx <= 0: continue` convention already used throughout
 stella_diagnostics/physics/rosenbluth_hinton.py's own per-kx plots.
 
+A second column of panels shows the same zonal `u_par` and `v_E =
+-d(phi)/dx` (evaluated in real space this time, i.e. FFT'd back from kx to
+x rather than divided kx-by-kx), each time-averaged over the same window
+and plotted vs x for every run in one shared axes per quantity. Unlike the
+left column's kx-space ratios, these are not divided by v_E (that would
+be 0/0 pointwise in x for a real-valued profile) -- instead `<u_par>` and
+`<u_par*cos(theta)>` are scaled by the same prefactors as the left
+column's numerators (-2*eps/q and -2/q respectively) so the two columns'
+row-2/row-3 traces are directly comparable in normalisation, and kx=0 is
+not excluded here (there is no x=0/0 singularity in real space).
+
 Usage:
     python plot_zonal_upar_vE_kx.py <config.py>
 
@@ -32,6 +43,11 @@ optionally:
                     window ending at each run's own last time sample)
     kx_min       -- lower kx bound to plot (default 0.0)
     kx_max       -- upper kx bound to plot (default 0.5)
+    x_min        -- lower x/rho_i bound to plot (default None -> autoscale)
+    x_max        -- upper x/rho_i bound to plot (default None -> autoscale)
+    nx           -- real-space x grid resolution passed to
+                    StellaRun.get_quantity_x_y (default None -> package
+                    default)
     eps          -- override the inverse aspect ratio (default None ->
                     estimated per-run from bmag via
                     stella_diagnostics.scan.zonal_flow_scan.estimate_eps_from_bmag)
@@ -61,10 +77,13 @@ time_avg = getattr(config, "time_avg", 20)
 time_val_avg = getattr(config, "time_val_avg", None)
 kx_min = getattr(config, "kx_min", 0.0)
 kx_max = getattr(config, "kx_max", 0.5)
+x_min = getattr(config, "x_min", None)
+x_max = getattr(config, "x_max", None)
+nx = getattr(config, "nx", None)
 eps_override = getattr(config, "eps", None)
 
-fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(9, 13), sharex=True)
-ax_ERH, ax_eps, ax_cos = axs
+fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(16, 13), sharex="col")
+(ax_ERH, ax_vE_x), (ax_eps, ax_upar_x), (ax_cos, ax_uparcos_x) = axs
 
 for i, dirname in enumerate(config.dirnames):
     label = labels[i]
@@ -108,6 +127,22 @@ for i, dirname in enumerate(config.dirnames):
     uparcos0 = uparcos_kx[:, 0]
     vE0 = -dxphi_kx[:, 0]
 
+    # Same field-line- and time-averaged, zonal (ky=0) upar/vE as above, but
+    # evaluated in real space (x) rather than reduced to kx.
+    upar_x_y, x, _, _ = run.get_quantity_x_y(
+        quantity="upar", time_idx=time_idx_center, time_avg=time_avg, only_zonal=True, nx=nx)
+    uparcos_x_y, _, _, _ = run.get_quantity_x_y(
+        quantity="upar", time_idx=time_idx_center, time_avg=time_avg, only_zonal=True, mult_zed="cos", nx=nx)
+    dxphi_x_y, _, _, _ = run.get_quantity_x_y(
+        quantity="phi", time_idx=time_idx_center, time_avg=time_avg, only_zonal=True, kx_order=1, nx=nx)
+    upar_of_x = upar_x_y[:, 0]
+    uparcos_of_x = uparcos_x_y[:, 0]
+    vE_of_x = -dxphi_x_y[:, 0]
+
+    ax_vE_x.plot(x, vE_of_x, marker=".", label=label, c=color)
+    ax_upar_x.plot(x, -2 * eps / q * upar_of_x, marker=".", label=label, c=color)
+    ax_uparcos_x.plot(x, -2 / q * uparcos_of_x, marker=".", label=label, c=color)
+
     E_RH_t_kx, time_E_RH, kx_E_RH = run.get_E_RH_t_kx(time_min=time_min_win, time_max=time_max_win, kx_max=1e5)
     E_RH_kx = np.mean(E_RH_t_kx, axis=0)
 
@@ -134,6 +169,19 @@ ax_cos.set_xlabel(r"$k_x \rho_i$")
 ax_cos.grid(True)
 
 ax_cos.set_xlim([kx_min, kx_max])
+
+ax_vE_x.set_ylabel(r"$\langle v_E\rangle$")
+ax_vE_x.grid(True)
+ax_vE_x.legend(fontsize=12)
+
+ax_upar_x.set_ylabel(r"$-\frac{2\epsilon}{q}\langle u_\parallel\rangle$")
+ax_upar_x.grid(True)
+
+ax_uparcos_x.set_ylabel(r"$-\frac{2}{q}\langle u_\parallel\cos\theta\rangle$")
+ax_uparcos_x.set_xlabel(r"$x/\rho_i$")
+ax_uparcos_x.grid(True)
+
+ax_uparcos_x.set_xlim([x_min, x_max])
 
 plt.tight_layout()
 fig.savefig(getattr(config, "figname", None) or "fig_zonal_upar_vE_kx.pdf")
