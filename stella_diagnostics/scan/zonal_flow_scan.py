@@ -22,9 +22,10 @@ from stella_diagnostics.io.cache import cached
 from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.physics.rosenbluth_hinton import get_P_RH_breakdown
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 
 
-@cached(version=2)
+@cached(version=3)
 def get_growth_rate_from_flux(run, time_max=1e10, qflx_rel_idx_min=1e-7, qflx_rel_idx_max=1e-3, time_val_avg=None, time_avg=5) -> dict:
     """Max linear growth rate estimated from the heat-flux rise between the
     times it crosses qflx_rel_idx_min/qflx_rel_idx_max of its peak, plus the
@@ -38,6 +39,12 @@ def get_growth_rate_from_flux(run, time_max=1e10, qflx_rel_idx_min=1e-7, qflx_re
     Q(t) panel plots the trace itself plus the exponential-growth
     reference line through those two indices -- version bumped to 2 since
     this widens the return dict's keys.
+
+    Version bumped to 3: qflx_avg now dt-weights the averaging window
+    (stella_diagnostics.spectral.stats.dt_weighted_mean) instead of a
+    plain np.mean, which implicitly assumed every saved sample covered an
+    equal time interval -- a real, deliberate fix, so old cache entries
+    must not be reused.
     """
     tprim = float(run.ncdata.variables["tprim"][0])
     qinp = float(run.ncdata.variables["q"].getValue())
@@ -48,11 +55,11 @@ def get_growth_rate_from_flux(run, time_max=1e10, qflx_rel_idx_min=1e-7, qflx_re
     time = time[time < time_max]
 
     if time_val_avg is None:
-        qflx_avg = np.mean(qflx[time > time[-1] - time_avg])
-        qflx_std = np.std(qflx[time > time[-1] - time_avg])
+        mask = time > time[-1] - time_avg
     else:
-        qflx_avg = np.mean(qflx[(time > time_val_avg - time_avg / 2) & (time < time_val_avg + time_avg / 2)])
-        qflx_std = np.std(qflx[(time > time_val_avg - time_avg / 2) & (time < time_val_avg + time_avg / 2)])
+        mask = (time > time_val_avg - time_avg / 2) & (time < time_val_avg + time_avg / 2)
+    qflx_avg = dt_weighted_mean(qflx[mask], time=time[mask])
+    qflx_std = np.std(qflx[mask])
 
     idx_qflx_max = max(np.argmax(qflx), 5)
     idx_max = np.argmin(np.abs(qflx[:idx_qflx_max] - qflx_rel_idx_max * qflx.max()))
@@ -255,7 +262,7 @@ def get_RH_power_transfer_profiles(run, time_val_avg=None, time_avg=5) -> dict:
 
     time = run.get_time_array()
     time_idxs = _get_time_idxs_for_avg(time, time_val_avg, time_avg)
-    dt_vals = np.gradient(time[time_idxs])
+    weights = dt_weights(time[time_idxs])
 
     dl_over_B_avg = run.dl_over_B_avg()
 
@@ -273,8 +280,8 @@ def get_RH_power_transfer_profiles(run, time_val_avg=None, time_avg=5) -> dict:
         dx_Pi_perp_zed_x_y, _, x, _, _ = run.get_quantity_zed_x_y(quantity="Reynolds", only_zonal=True, kx_order=1, time_idx=time_idx)
         uparZ_zed_x_y, _, x, _, _ = run.get_quantity_zed_x_y(quantity="upar", only_zonal=True, kx_order=0, time_idx=time_idx)
 
-        dE_Pi_parallel_x += -np.sum(dl_over_B_avg[:, None] * dx_Pi_parallel_zed_x_y[:, :, 0] * uparZ_zed_x_y[:, :, 0], axis=0) * dt_vals[i] / np.sum(dt_vals)
-        dE_Pi_perp_x += -np.sum(dl_over_B_avg[:, None] * dx_Pi_perp_zed_x_y[:, :, 0], axis=0) * (-vE_x) * dt_vals[i] / np.sum(dt_vals)
+        dE_Pi_parallel_x += -np.sum(dl_over_B_avg[:, None] * dx_Pi_parallel_zed_x_y[:, :, 0] * uparZ_zed_x_y[:, :, 0], axis=0) * weights[i] / np.sum(weights)
+        dE_Pi_perp_x += -np.sum(dl_over_B_avg[:, None] * dx_Pi_perp_zed_x_y[:, :, 0], axis=0) * (-vE_x) * weights[i] / np.sum(weights)
 
         try:
             RH_flux_phi_even_x_y, x, _, _ = run.get_quantity_x_y(quantity="RH_fluxes_phi_even", only_zonal=True, kx_order=0, time_idx=time_idx)
@@ -303,12 +310,12 @@ def get_RH_power_transfer_profiles(run, time_val_avg=None, time_avg=5) -> dict:
         dxphi_RH_x_y_inst, x, _, _ = run.get_quantity_x_y(quantity="RH_phi", only_zonal=True, kx_order=1, time_idx=time_idx)
         vE_RH_x_inst = -dxphi_RH_x_y_inst[:, 0]
 
-        P_RH_even_x += -RH_flux_phi_even_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
-        P_RH_odd_x += -RH_flux_phi_odd_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
-        P_RH_even_passing_x += -RH_flux_phi_even_passing_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
-        P_RH_odd_passing_x += -RH_flux_phi_odd_passing_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
-        P_RH_even_trapped_x += -RH_flux_phi_even_trapped_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
-        P_RH_odd_trapped_x += -RH_flux_phi_odd_trapped_x * vE_RH_x_inst * dt_vals[i] / np.sum(dt_vals)
+        P_RH_even_x += -RH_flux_phi_even_x * vE_RH_x_inst * weights[i] / np.sum(weights)
+        P_RH_odd_x += -RH_flux_phi_odd_x * vE_RH_x_inst * weights[i] / np.sum(weights)
+        P_RH_even_passing_x += -RH_flux_phi_even_passing_x * vE_RH_x_inst * weights[i] / np.sum(weights)
+        P_RH_odd_passing_x += -RH_flux_phi_odd_passing_x * vE_RH_x_inst * weights[i] / np.sum(weights)
+        P_RH_even_trapped_x += -RH_flux_phi_even_trapped_x * vE_RH_x_inst * weights[i] / np.sum(weights)
+        P_RH_odd_trapped_x += -RH_flux_phi_odd_trapped_x * vE_RH_x_inst * weights[i] / np.sum(weights)
 
     dyphi2_x = shear["dyphi2_x"]
 
@@ -398,11 +405,11 @@ def get_RH_power_time_averages(run, time_max=1e10, time_idx_skip=10, time_val_av
     P_RH_apar_t, P_RH_apar_t_LW = _sum_kx(P_RH_apar_t_kx), _sum_kx(P_RH_apar_t_kx, True)
     P_RH_bpar_t, P_RH_bpar_t_LW = _sum_kx(P_RH_bpar_t_kx), _sum_kx(P_RH_bpar_t_kx, True)
 
-    dt = np.gradient(time)
+    dt = dt_weights(time)
     idxs_avg = _get_time_idxs_for_avg(time, time_val_avg, time_avg)
 
     def _avg(t_arr):
-        return np.sum((dt * t_arr)[idxs_avg]) / np.sum(dt[idxs_avg])
+        return dt_weighted_mean(t_arr[idxs_avg], weights=dt[idxs_avg])
 
     return {
         "time": time,

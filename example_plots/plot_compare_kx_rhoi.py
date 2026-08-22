@@ -6,8 +6,8 @@ Usage:
 
 <config.py> defines `base_dirs`, `tprim_vals`, `zeta_center_vals`
 (required) and optionally `filename`, `code`, `markers`, `ls_base_dirs`,
-`colors_tube`, `take_last`, `time_avg`, `time_val_avg`, `figname_time`,
-`figname_scaling`.
+`colors_tube`, `take_last`, `time_avg`, `time_val_avg`, `figname_add`,
+`figname_time`, `figname_scaling`.
 
 `time_avg`/`time_val_avg`: trailing (time_val_avg=None, default) or
 centered (time_val_avg=X) window WIDTH -- same convention as every other
@@ -42,6 +42,7 @@ colors_tube = getattr(config, "colors_tube", ["r", "g"])
 take_last = getattr(config, "take_last", False)
 time_avg = getattr(config, "time_avg", 350)
 time_val_avg = getattr(config, "time_val_avg", None)
+figname_add = getattr(config, "figname_add", "")
 
 colors = sns.color_palette("rocket", len(config.tprim_vals))
 
@@ -73,7 +74,7 @@ plt.ylabel(r"$\langle (k_x \rho_i)^{-1} \rangle^{-1}$")
 plt.xlim(xmin=0)
 plt.ylim(ymin=0)
 plt.tight_layout()
-plt.savefig(getattr(config, "figname_time", "fig_kxrhoi_outer_time_QA.pdf"))
+plt.savefig(getattr(config, "figname_time", None) or "fig_kxrhoi_outer_time_QA" + figname_add + ".pdf")
 
 plt.close()
 plt.figure(figsize=(5, 3))
@@ -86,4 +87,4 @@ plt.legend()
 plt.xlabel(r"$a/L_T$")
 plt.ylabel(r"$\langle (k_x \rho_i)^{-1} \rangle^{-1}$")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname_scaling", "fig_kxrhoi_outer_QA.pdf"))
+plt.savefig(getattr(config, "figname_scaling", None) or "fig_kxrhoi_outer_QA" + figname_add + ".pdf")

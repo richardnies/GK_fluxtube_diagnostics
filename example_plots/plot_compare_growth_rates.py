@@ -11,7 +11,7 @@ nfield_periods sweep, build this as a plain Python list comprehension in
 the config file itself, e.g.
 `dirnames = [[tpl % (aky, nfp) for aky in akyminmax_vals] for nfp in nfield_periods_vals]`)
 and optionally `series_labels` (one per series, e.g. `r"$Nfp=%i$" % nfp`),
-`filename`, `figname`.
+`filename`, `figname_add`, `figname`.
 """
 import sys
 
@@ -28,6 +28,7 @@ set_default_style()
 config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 filename = getattr(config, "filename", "CBC")
+figname_add = getattr(config, "figname_add", "")
 series_labels = getattr(config, "series_labels", [None] * len(config.dirnames))
 
 fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(14, 9))
@@ -40,4 +41,4 @@ for i_series, series_dirnames in enumerate(config.dirnames):
     scan.plot_omega_ky(axs=axs, label=series_labels[i_series])
 
 axs[0].legend()
-plt.savefig(getattr(config, "figname", "fig_comparison_growth_rates.pdf"))
+plt.savefig(getattr(config, "figname", None) or "fig_comparison_growth_rates" + figname_add + ".pdf")

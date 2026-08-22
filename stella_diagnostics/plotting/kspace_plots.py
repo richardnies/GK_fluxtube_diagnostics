@@ -15,6 +15,7 @@ from os.path import exists
 from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def plot_spectrum2(run, quantity, kx_or_ky, fig=None, ax=None, species_idx=0, time_idx=-1, time_val=None, remove_zonal=False, only_zonal=False, kx_order=0, ky_order=0, time_avg=None, c=None, lw=None, label=None, marker='.', scale_kmin=True, scale_CB=False, zed_val=None, zed_idx=None, ls='-', mult_zed=None):
@@ -475,7 +476,8 @@ def plot_phi_t_ky(run, fig=None, ax=None, zed_idx=None, remove_zonal=False, only
     phi_t = phi_t[time < t_max]
     time  = time[time < t_max]
 
-    phi_end = np.mean(phi_t[time > max(0, time[-1]-time_avg)])
+    mask = time > max(0, time[-1]-time_avg)
+    phi_end = dt_weighted_mean(phi_t[mask], time=time[mask])
     # Normalise by flux-tube averaged kperp2 if desired
     if norm_kperp2:
         kperp2 = run.get_avg_kperp2()

@@ -19,6 +19,7 @@ series shape.
 """
 
 filename = "example"
+figname_add = ""
 
 # --- the scan itself: single source of truth ---
 tprim_vals = [4.2, 6.7]

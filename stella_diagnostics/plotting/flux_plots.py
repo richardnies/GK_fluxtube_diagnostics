@@ -14,6 +14,7 @@ from glob import glob
 from os.path import exists
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
 from stella_diagnostics.io.codes import get_nspecies, get_species_label, get_species_name, get_vt_label
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def evaluate_net_radial_drift(run, B_bounce=0.9):
@@ -135,9 +136,10 @@ def plot_flux_over_time(run, axs=None, label=None, species_idx=None, ls='-', col
 
         if timeavg is not None:
             timemax  = min(timemax, time[-1])
-            pflx_avg = np.average(pflx[(time > timemax-timeavg) & (time <= timemax)])
-            vflx_avg = np.average(vflx[(time > timemax-timeavg) & (time <= timemax)])
-            qflx_avg = np.average(qflx[(time > timemax-timeavg) & (time <= timemax)])
+            mask = (time > timemax-timeavg) & (time <= timemax)
+            pflx_avg = dt_weighted_mean(pflx[mask], time=time[mask])
+            vflx_avg = dt_weighted_mean(vflx[mask], time=time[mask])
+            qflx_avg = dt_weighted_mean(qflx[mask], time=time[mask])
             pflx_avg_vs_s[sp_idx] = pflx_avg
             vflx_avg_vs_s[sp_idx] = vflx_avg
             qflx_avg_vs_s[sp_idx] = qflx_avg

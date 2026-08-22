@@ -12,6 +12,7 @@ k-grid to actually exercise this code path.
 """
 filename = "example"
 time_avg = None
+figname_add = ""
 load_from_file = False
 
 # --- the scan itself: single source of truth, as in scan_config.py ---

@@ -9,7 +9,8 @@ Usage:
 <config.py> defines `dirname` (required) and optionally `filename`, `code`,
 `time_val_avg`, `time_avg`, `time_max`, `qflx_rel_idx_min`,
 `qflx_rel_idx_max`, `kx_max`, `time_idx_skip`, `exp_avg`, `avg_norm`,
-`nx_padded`, `ny_padded`, `panels`, `theta_vals`, `ncols`, `figname`.
+`nx_padded`, `ny_padded`, `panels`, `theta_vals`, `ncols`, `figname_add`,
+`figname`.
 
 `panels`: which panels to include and in what order (default
 zonal_flow_scan.DEFAULT_PANELS, a curated 8-panel subset) -- see
@@ -46,6 +47,7 @@ config = load_scan_config(sys.argv[1], required=("dirname",))
 
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+figname_add = getattr(config, "figname_add", "")
 
 run = StellaRun(config.dirname + "/" + filename, code=code)
 
@@ -72,5 +74,5 @@ plt.tight_layout()
 dirname_string = config.dirname.replace("/", "_")
 figname = getattr(config, "figname", None)
 if figname is None:
-    figname = "fig_gammalin_gammaE_" + dirname_string + ".pdf"
+    figname = "fig_gammalin_gammaE_" + dirname_string + figname_add + ".pdf"
 fig.savefig(figname, bbox_inches="tight")

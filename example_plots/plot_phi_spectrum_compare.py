@@ -13,7 +13,7 @@ to each group's output filenames alongside the tprim read from that
 group's own runs; defaults to ""), `scaling_theory_vals`,
 `W_instead_of_phi`, `lw`, `overplot_kx_ky`, `plot_legend`,
 `plot_alpha_spectrum`, `time_avg`, `load_from_file`, `plot_slides`,
-`add_arrows`, `colors`, `filename`, `code`, `ylim_ky`, `ylim_kx_nonzonal`,
+`add_arrows`, `colors`, `filename`, `code`, `figname_add`, `ylim_ky`, `ylim_kx_nonzonal`,
 `ylim_kx_zonal`, `ylim_alpha_spectrum` (y-axis limits for the three
 spectrum panels and the alpha-spectrum variant of each -- all default
 None, letting matplotlib autoscale; these spectra span many orders of
@@ -65,6 +65,7 @@ ylim_kx_nonzonal = getattr(config, "ylim_kx_nonzonal", None)
 ylim_kx_zonal = getattr(config, "ylim_kx_zonal", None)
 ylim_alpha_spectrum = getattr(config, "ylim_alpha_spectrum", None)
 figname_suffixes = getattr(config, "figname_suffixes", [""] * len(config.dirnames))
+figname_add = getattr(config, "figname_add", "")
 group_labels = getattr(config, "labels", [[None] * len(d) for d in config.dirnames])
 
 figsize = (7, 4.5) if plot_slides else (4.5, 4.5)
@@ -89,7 +90,7 @@ for i_group, group_dirnames in enumerate(config.dirnames):
     if not filenames_list:
         print("No runs found for figure group %d" % i_group)
         continue
-    add_str += "_tprim-%.4f" % tprim_list[0]
+    add_str += "_tprim-%.4f" % tprim_list[0] + figname_add
 
     for scaling_theory in scaling_theory_vals:
         scanObj = RunCollection(filenames_list, labels_list, codes_list)

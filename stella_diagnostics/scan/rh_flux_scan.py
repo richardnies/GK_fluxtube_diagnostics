@@ -15,14 +15,7 @@ from stella_diagnostics.scan.zonal_flow_scan import (
     get_growth_rate_from_flux,
     get_zonal_shear_profiles,
 )
-
-
-def _dt_weighted_mean(x, t):
-    """dt-weighted mean of x(t) -- collapses the
-    np.sum(x*np.gradient(t))/np.sum(np.gradient(t)) pattern repeated across
-    this module and stella_diagnostics.scan.flux_energy_scan."""
-    dt = np.gradient(t)
-    return np.sum(x * dt) / np.sum(dt)
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def plot_qflx_vs_nu_scan(
@@ -88,7 +81,7 @@ def plot_qflx_vs_nu_scan(
                 qflx = qflx[time > time[-1] - time_avg]
                 time = time[time > time[-1] - time_avg]
 
-                qflx_avg_nu.append(_dt_weighted_mean(qflx, time))
+                qflx_avg_nu.append(dt_weighted_mean(qflx, time=time))
                 qflx_std_nu.append(np.std(qflx))
                 nu_plot.append(nu)
             except Exception as e:
@@ -272,11 +265,11 @@ def plot_ERH_Ephi_vs_tprim(
                 time_max = run.ncdata.variables["t"][-1]
 
                 E_RH_t_kx, RH_time, RH_kx = run.get_E_RH_t_kx(time_min=time_min, time_max=time_max)
-                ERH_vals[i_dir] = np.sum(E_RH_t_kx * np.gradient(RH_time)[:, None]) / np.sum(np.gradient(RH_time))
+                ERH_vals[i_dir] = np.sum(dt_weighted_mean(E_RH_t_kx, time=RH_time, axis=0))
 
                 phi2_t_kx_ky, time, kx, ky = run.read_phi2_spectra(time_min=time_min, time_max=time_max)
                 Gamma0 = _gamma0_kx_only(kx)
-                Ephi_vals[i_dir] = 0.5 * np.sum((1 - Gamma0)[None, :] * phi2_t_kx_ky[:, :, 0] * np.gradient(time)[:, None]) / np.sum(np.gradient(time))
+                Ephi_vals[i_dir] = 0.5 * np.sum(dt_weighted_mean((1 - Gamma0)[None, :] * phi2_t_kx_ky[:, :, 0], time=time, axis=0))
 
             except Exception as e:
                 print(e)

@@ -15,6 +15,7 @@ from os.path import exists
 from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.cache import cached
 from stella_diagnostics.io.codes import get_rho_label, get_vt_label
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 
 
 def _resample_uniform_time(f_t, time, axis=0):
@@ -106,9 +107,10 @@ def read_data_omega_k(run, timestep=-1, om_avg=True, check_convergence=True, non
             omega_slice = omega_data[np.argmin( np.abs(time_all - time_val_avg) )]
     else:
         if time_val_avg is None:
-            omega_slice = np.mean(omega_data[ np.logical_and(time_all > time_all[timestep]-time_avg, time_all <= time_all[timestep])], axis=0)
+            mask = np.logical_and(time_all > time_all[timestep]-time_avg, time_all <= time_all[timestep])
         else:
-            omega_slice = np.mean(omega_data[ np.logical_and(time_all > time_val_avg-time_avg, time_all <= time_val_avg)], axis=0)
+            mask = np.logical_and(time_all > time_val_avg-time_avg, time_all <= time_val_avg)
+        omega_slice = dt_weighted_mean(omega_data[mask], time=time_all[mask], axis=0)
 
 
     time     = omega_slice[:,:,0]
@@ -396,10 +398,10 @@ def get_avg_stddev_timetrace(time, quantity, timeavg, timemax=None):
         time_to_avg     = time[-2:]
         quantity_to_avg = quantity[-2:]
 
-    Delta_t = np.gradient(time_to_avg)
+    weights = dt_weights(time_to_avg)
 
-    quantity_mean = np.mean(quantity_to_avg*Delta_t)/np.mean(Delta_t)
-    quantity_std  = np.sqrt( np.mean( Delta_t*(quantity_to_avg-quantity_mean)**2 )/np.mean(Delta_t) )
+    quantity_mean = dt_weighted_mean(quantity_to_avg, weights=weights)
+    quantity_std  = np.sqrt(dt_weighted_mean((quantity_to_avg-quantity_mean)**2, weights=weights))
 
     return quantity_mean, quantity_std
 

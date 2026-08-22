@@ -8,7 +8,7 @@ Usage:
 flat list of run directories in that collisionality-swept series -- tprim
 and nu_ii are read directly from each run's own netCDF output, not
 supplied separately) and optionally `filename`, `code`, `time_avg`,
-`rhoc`, `q`, `shat`, `figname`.
+`rhoc`, `q`, `shat`, `figname_add`, `figname`.
 
 `time_avg` is the trailing-window width (time units before each run's last
 sample), the same convention used across every quantity-time-averaging
@@ -37,6 +37,7 @@ set_default_style()
 config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 time_avg = getattr(config, "time_avg", 200)
+figname_add = getattr(config, "figname_add", "")
 
 fig, axs = plot_qflx_vs_nu_scan(
     config.dirnames,
@@ -49,5 +50,5 @@ fig, axs = plot_qflx_vs_nu_scan(
 )
 
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", None) or "fig_Q_nu_dtavg-%i.pdf" % time_avg)
+plt.savefig(getattr(config, "figname", None) or "fig_Q_nu_dtavg-%i" % time_avg + figname_add + ".pdf")
 plt.close()

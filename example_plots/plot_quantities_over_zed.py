@@ -5,10 +5,10 @@ Usage:
 
 <config.py> defines `dirname` (required, the run's directory) and
 optionally `filename`, `code`, `kwargs` (dict forwarded to
-plot_quantities_over_zed), `ylim`, `figname` -- same dirname/filename
-split as every other single-run driver in this package (changed from
-treating dirname as the full filename_base, for config-vocabulary
-consistency).
+plot_quantities_over_zed), `ylim`, `figname_add`, `figname` -- same
+dirname/filename split as every other single-run driver in this package
+(changed from treating dirname as the full filename_base, for
+config-vocabulary consistency).
 
 `kwargs` defaults to `{}`, which plots nothing (every quantity in
 plot_quantities_over_zed is opt-in via its own `plot_<name>=True` flag,
@@ -40,4 +40,5 @@ ax.legend()
 ax.set_ylim(getattr(config, "ylim", None))
 ax.grid()
 
-plt.savefig(getattr(config, "figname", "fig_quantities_over_zed.pdf"))
+figname_add = getattr(config, "figname_add", "")
+plt.savefig(getattr(config, "figname", None) or "fig_quantities_over_zed" + figname_add + ".pdf")

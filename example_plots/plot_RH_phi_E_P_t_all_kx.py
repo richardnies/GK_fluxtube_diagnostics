@@ -7,7 +7,8 @@ Usage:
 <config.py> defines `dirname` (required) and optionally `filename`, `code`,
 `fphi`, `fapar`, `fbpar`, `fcoll`, `kx_max`, `time_min`, `time_max`,
 `ylim_P_RH`, `linthresh`, `D_hyper`, `passing_trapped`, `combine_fields`,
-`combine_even_odd`.
+`combine_even_odd`, `figname_add` (applied to the two summary figures
+only, not the per-kx figures in the figs_RH_*/ subdirectories).
 
 `fapar`/`fbpar` default to 1 (included), not 0 -- safe even for runs
 without electromagnetic effects, since read_RH_fluxes falls back to an
@@ -33,6 +34,7 @@ from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
 from stella_diagnostics.scan.config import load_scan_config
 from stella_diagnostics.scan.rh_per_kx_scan import plot_RH_per_kx_summary_vs_kx, plot_RH_per_kx_summary_vs_time
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
@@ -55,6 +57,7 @@ D_hyper = getattr(config, "D_hyper", None)
 passing_trapped = getattr(config, "passing_trapped", "both")
 combine_fields = getattr(config, "combine_fields", False)
 combine_even_odd = getattr(config, "combine_even_odd", False)
+figname_add = getattr(config, "figname_add", "")
 
 dirname_string = config.dirname.replace("/", "_")
 fig_dir_I_phi_RH = "figs_RH_I_phi_" + dirname_string
@@ -113,21 +116,21 @@ for i_kx in range(len(kx_all)):
         fphi=fphi, fapar=fapar, fbpar=fbpar, fcoll=fcoll, D_hyper=D_hyper,
         combine_fields=combine_fields, combine_even_odd=combine_even_odd,
     )
-    mean_P_RH_even = np.mean(P_RH_even_t_kx[:, 0])
-    mean_P_RH_odd = np.mean(P_RH_odd_t_kx[:, 0])
+    mean_P_RH_even = dt_weighted_mean(P_RH_even_t_kx[:, 0], time=time)
+    mean_P_RH_odd = dt_weighted_mean(P_RH_odd_t_kx[:, 0], time=time)
     P_RH_phi_t_kx = P_RH_phi_even_t_kx + P_RH_phi_odd_t_kx
-    mean_P_RH_phi = np.mean(P_RH_phi_t_kx[:, 0])
+    mean_P_RH_phi = dt_weighted_mean(P_RH_phi_t_kx[:, 0], time=time)
     P_RH_apar_t_kx = P_RH_apar_even_t_kx + P_RH_apar_odd_t_kx
-    mean_P_RH_apar = np.mean(P_RH_apar_t_kx[:, 0])
+    mean_P_RH_apar = dt_weighted_mean(P_RH_apar_t_kx[:, 0], time=time)
     P_RH_bpar_t_kx = P_RH_bpar_even_t_kx + P_RH_bpar_odd_t_kx
-    mean_P_RH_bpar = np.mean(P_RH_bpar_t_kx[:, 0])
+    mean_P_RH_bpar = dt_weighted_mean(P_RH_bpar_t_kx[:, 0], time=time)
     P_RH_coll_t_kx = P_RH_coll_even_t_kx + P_RH_coll_odd_t_kx
-    mean_P_RH_coll = np.mean(P_RH_coll_t_kx[:, 0])
+    mean_P_RH_coll = dt_weighted_mean(P_RH_coll_t_kx[:, 0], time=time)
     mean_P_RH = mean_P_RH_even + mean_P_RH_odd
     if D_hyper is not None:
-        mean_P_RH_hyper = np.mean(P_RH_hyper_t_kx[:, 0])
+        mean_P_RH_hyper = dt_weighted_mean(P_RH_hyper_t_kx[:, 0], time=time)
         mean_P_RH += mean_P_RH_hyper
-    mean_P_RH_num = np.mean(P_RH_t_kx_num[:, 0])
+    mean_P_RH_num = dt_weighted_mean(P_RH_t_kx_num[:, 0], time=t)
 
     # axs[-1] is always the total/cross-check panel, regardless of
     # combine_even_odd (which changes how many panels plot_P_RH creates).
@@ -162,10 +165,10 @@ means_kwargs = dict(
 
 fig, axs = plot_RH_per_kx_summary_vs_time(run, ylim_P_RH=ylim_P_RH, linthresh=linthresh, **means_kwargs)
 plt.tight_layout()
-fig.savefig("fig_E_RH_P_RH_total" + dirname_string + "_" + str_fig + fig_add + ".pdf", bbox_inches="tight")
+fig.savefig("fig_E_RH_P_RH_total" + dirname_string + "_" + str_fig + fig_add + figname_add + ".pdf", bbox_inches="tight")
 plt.close()
 
 fig, axs = plot_RH_per_kx_summary_vs_kx(run, **means_kwargs)
 plt.tight_layout()
-fig.savefig("fig_E_RH_P_RH_mean_kx_" + dirname_string + "_" + str_fig + fig_add + ".pdf", bbox_inches="tight")
+fig.savefig("fig_E_RH_P_RH_mean_kx_" + dirname_string + "_" + str_fig + fig_add + figname_add + ".pdf", bbox_inches="tight")
 plt.close()

@@ -16,7 +16,7 @@ a worked example) and optionally `quantities`, `scale_theories`,
 default None lets matplotlib autoscale, since the correlation function
 can be negative and a hardcoded positive lower bound would silently hide
 the whole curve), `qinp_default` (the fixed qinp used for tprim_scan
-points), `figname_prefix`.
+points), `figname_prefix`, `figname_add`.
 
 Each dirname's actual run directory is resolved the same way the original
 script did: `<dirname>/run_tprim_val-<val>/<filename>` for tprim_scan,
@@ -118,6 +118,7 @@ sum_other = getattr(config, "sum_other", True)
 log_abs = getattr(config, "log_abs", False)
 ylim_logabs = getattr(config, "ylim_logabs", None)
 figname_prefix = getattr(config, "figname_prefix", "fig_correlation_perp_func_")
+figname_add = getattr(config, "figname_add", "")
 
 for quantity in quantities:
     for scale_theory in scale_theories:
@@ -183,5 +184,6 @@ for quantity in quantities:
         title = title + "_" + scale_theory
         if log_abs:
             title += "_logabs"
+        title += figname_add
         fig_x.savefig(title + "_x.pdf")
         fig_y.savefig(title + "_y.pdf")

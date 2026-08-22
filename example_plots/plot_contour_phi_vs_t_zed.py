@@ -8,7 +8,7 @@ Usage:
 plot_gvmus_all_dirs.py's grid convention; for a zeta_center x akyminmax
 sweep, format these directly in the config file, e.g.
 `col_titles = [r"$k_y\rho_i=%.2f$" % v for v in akyminmax_vals]`) and
-optionally `filename`, `code`, `figname`.
+optionally `filename`, `code`, `figname_add`, `figname`.
 
 tprim (for the figure suptitle/filename) is read directly from the first
 resolved run's own netCDF output, not supplied separately.
@@ -37,6 +37,7 @@ config = load_scan_config(sys.argv[1], required=("dirnames", "row_titles", "col_
 
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+figname_add = getattr(config, "figname_add", "")
 
 Nrows = len(config.row_titles)
 Ncols = len(config.col_titles)
@@ -62,4 +63,4 @@ for i_row in range(Nrows):
 
 fig.suptitle(r"$|\phi|(\zeta, t)$ for $a/L_T =$ %.1f" % tprim if tprim is not None else "")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%.1f.pdf" % tprim)
+plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%.1f" % tprim + figname_add + ".pdf")

@@ -10,9 +10,10 @@ small cached function here.
 import numpy as np
 
 from stella_diagnostics.io.cache import cached
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
-@cached(version=3)
+@cached(version=4)
 def get_time_avg_kx_rhoi(run, time_avg=350, take_last=False, time_val_avg=None):
     """(time, kx_rhoi_O, kx_rhoi_O_avg) for one run.
 
@@ -36,6 +37,12 @@ def get_time_avg_kx_rhoi(run, time_avg=350, take_last=False, time_val_avg=None):
     function was unpacking it as `time, kx_rhoi_O = ...` (swapped) --
     confirmed via git history to predate this fix. A plain variable-order
     bug, not a physics/formula choice, so corrected rather than preserved.
+
+    Version bumped to 4: kx_rhoi_O_avg now dt-weights the averaging
+    window (stella_diagnostics.spectral.stats.dt_weighted_mean) instead
+    of a plain np.average, which implicitly assumed every saved sample
+    covered an equal time interval -- a real, deliberate fix, so old
+    cache entries must not be reused.
     """
     kx_rhoi_O, time = run.read_avg_kx_rhoi()
 
@@ -50,6 +57,6 @@ def get_time_avg_kx_rhoi(run, time_avg=350, take_last=False, time_val_avg=None):
     if time[-1] - time[0] < time_avg or not np.any(mask):
         kx_rhoi_O_avg = np.nan
     else:
-        kx_rhoi_O_avg = np.average(kx_rhoi_O[mask])
+        kx_rhoi_O_avg = dt_weighted_mean(kx_rhoi_O[mask], time=time[mask])
 
     return time, kx_rhoi_O, kx_rhoi_O_avg

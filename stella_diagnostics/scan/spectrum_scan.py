@@ -17,6 +17,7 @@ from stella_diagnostics.spectral.omega import get_avg_stddev_timetrace
 from stella_diagnostics.io.codes import get_rho_label
 from stella_diagnostics.io.run import StellaRun, FALLBACK_ASPECT_RATIO
 from stella_diagnostics.io.cache import cached
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def _style_from_list(style_list, i, default=None):
@@ -188,7 +189,7 @@ def get_phi_k_spectrum(run, plot_kx, time_idx=-1, time_avg=None, only_zonal=Fals
 
     if plot_RH_phi_spectrum:
         E_RH_t_kx, RH_time, RH_kx = run.get_E_RH_t_kx(time_min=time_min, time_max=time_max)
-        phi2_k = np.average(E_RH_t_kx[:,RH_kx>0], weights=np.gradient(RH_time), axis=0)*2
+        phi2_k = dt_weighted_mean(E_RH_t_kx[:,RH_kx>0], time=RH_time, axis=0)*2
         k      = RH_kx[      RH_kx>0]
         phi2_k_stddev = np.zeros_like(phi2_k)
 
@@ -205,7 +206,7 @@ def get_phi_k_spectrum(run, plot_kx, time_idx=-1, time_avg=None, only_zonal=Fals
             phi2_kx_ky_stddev = np.zeros_like(phi2_kx_ky)
             print("Evaluating at t = %.2f" % (time[-1]))
         else:
-            phi2_kx_ky = np.average(    phi2_t_kx_ky, weights=np.gradient(time), axis=0)
+            phi2_kx_ky = dt_weighted_mean(phi2_t_kx_ky, time=time, axis=0)
             phi2_kx_ky_stddev = np.std( phi2_t_kx_ky,                            axis=0)
 
         if plot_kx:

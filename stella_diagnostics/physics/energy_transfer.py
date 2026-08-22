@@ -13,9 +13,10 @@ this was extracted from, not by a real-data numeric comparison.
 import numpy as np
 
 from stella_diagnostics.io.cache import cached
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 
 
-@cached(version=1)
+@cached(version=2)
 def get_energy_transfer_kx_ky(run, time_min, time_max, time_idx_skip=1):
     """dict of time-averaged Kx/Ky-resolved nonlinear energy transfer
     quantities for one run (`time_max=None` evaluates only the single
@@ -27,6 +28,14 @@ def get_energy_transfer_kx_ky(run, time_min, time_max, time_idx_skip=1):
     - dKx_PiQ_Kx/dKy_PiQ_Ky: heat-flux-driven Kx/Ky transfer contribution
       (NaN for a given time frame if qflx_kxky isn't available there)
     - tprim
+
+    Version bumped to 2: the time-average weights each retained frame by
+    its own local spacing among the *retained* (possibly time_idx_skip-
+    strided) samples (dt_weights(time_all[time_idx_vals])), not the local
+    spacing in the full, unstrided time array indexed by time_idx_vals --
+    the previous form under-weighted each retained frame whenever
+    time_idx_skip>1, since it ignored the frames each one stands in for.
+    Identical output when time_idx_skip=1 (the default).
     """
     time_all = run.get_time_array()
     time_idx_min = run.get_time_idx(time_min)
@@ -68,12 +77,12 @@ def get_energy_transfer_kx_ky(run, time_min, time_max, time_idx_skip=1):
         for i_ky in range(NKy):
             dKy_PiQ_Ky_time[i_ky, i_time_idx] = 2 * tprim * np.sum(qflx_kx_ky[:, i_ky]) if load_Q else np.nan
 
-    dt_vals = np.gradient(time_all)[time_idx_vals]
-    PiNZ_Kx = np.sum(PiNZ_Kx_time * dt_vals[None, :], axis=1) / np.sum(dt_vals)
-    PiNZ_Ky = np.sum(PiNZ_Ky_time * dt_vals[None, :], axis=1) / np.sum(dt_vals)
-    PiZ_Kx_kxadv = np.sum(PiZ_Kx_kxadv_time * dt_vals[None, None, :], axis=2) / np.sum(dt_vals)
-    dKx_PiQ_Kx = np.sum(dKx_PiQ_Kx_time * dt_vals[None, :], axis=1) / np.sum(dt_vals)
-    dKy_PiQ_Ky = np.sum(dKy_PiQ_Ky_time * dt_vals[None, :], axis=1) / np.sum(dt_vals)
+    dt_vals = dt_weights(time_all[time_idx_vals])
+    PiNZ_Kx = dt_weighted_mean(PiNZ_Kx_time, weights=dt_vals, axis=1)
+    PiNZ_Ky = dt_weighted_mean(PiNZ_Ky_time, weights=dt_vals, axis=1)
+    PiZ_Kx_kxadv = dt_weighted_mean(PiZ_Kx_kxadv_time, weights=dt_vals, axis=2)
+    dKx_PiQ_Kx = dt_weighted_mean(dKx_PiQ_Kx_time, weights=dt_vals, axis=1)
+    dKy_PiQ_Ky = dt_weighted_mean(dKy_PiQ_Ky_time, weights=dt_vals, axis=1)
 
     return {
         "time_idx_vals": time_idx_vals,

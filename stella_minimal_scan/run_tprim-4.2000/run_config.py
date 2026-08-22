@@ -35,6 +35,7 @@ code = "stella"
 time_min = 39
 time_max = 52
 time_avg = 13
+figname_add = ""
 kx_max = 0.3
 
 # Only movie_gvmus_Z-NZ_kxs.py needs these (required for it specifically).

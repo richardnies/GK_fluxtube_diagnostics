@@ -15,7 +15,7 @@ Usage:
 either a number or "auto" -- picks the first/last time index where
 PiNZ_Kx isn't NaN), `colors`, `labels` (required, all lists, one entry
 per run) and optionally `filename`, `code`, `only_last`, `Kmax`,
-`norm_each_Kx`, `log_scale`, `gradient`, `figname_prefix`.
+`norm_each_Kx`, `log_scale`, `gradient`, `figname_prefix`, `figname_add`.
 """
 import sys
 
@@ -25,6 +25,7 @@ import numpy as np
 from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
 from stella_diagnostics.scan.config import load_scan_config
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
@@ -40,6 +41,7 @@ norm_each_Kx = getattr(config, "norm_each_Kx", False)
 log_scale = getattr(config, "log_scale", False)
 gradient = getattr(config, "gradient", True)
 figname_prefix = getattr(config, "figname_prefix", "fig_Pi_energytransfer")
+figname_add = getattr(config, "figname_add", "")
 
 dirnames = list(config.dirnames)
 tmin_vals = list(config.tmin_vals)
@@ -189,7 +191,8 @@ for i_dir, dirname in enumerate(dirnames):
             time_idx_min_flux = np.argmin(np.abs(time - time_min))
             qflx_avg = qflx[time_idx_min_flux]
         else:
-            qflx_avg = np.mean(qflx[time > time[-1] - delta_t])
+            mask = time > time[-1] - delta_t
+            qflx_avg = dt_weighted_mean(qflx[mask], time=time[mask])
 
         norm = qflx_avg * tprim
         print("Q grad(T) = %.2e \n" % (norm))
@@ -209,7 +212,7 @@ if gradient:
     figname += "_dK"
 if log_scale:
     figname += "_logscale"
-fig.savefig(figname + ".pdf")
+fig.savefig(figname + figname_add + ".pdf")
 
 ax_s.set_xlim([0, Kmax])
 if not gradient:
@@ -233,7 +236,7 @@ if norm_each_Kx:
     figname_summary += "_norm_each_Kx"
 if only_last:
     figname_summary += "_last"
-fig_s.savefig(figname_summary + ".pdf")
+fig_s.savefig(figname_summary + figname_add + ".pdf")
 
 # ky plot
 ax_s_ky.set_xlim([0, Kmax])
@@ -258,4 +261,4 @@ if norm_each_Kx:
     figname_summary_ky += "_norm_each_Ky"
 if only_last:
     figname_summary_ky += "_last"
-fig_s_ky.savefig(figname_summary_ky + ".pdf")
+fig_s_ky.savefig(figname_summary_ky + figname_add + ".pdf")

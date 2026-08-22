@@ -40,6 +40,7 @@ filename = "example"
 time_min = 10
 time_max = 50
 time_avg = 20
+figname_add = ""
 
 # --- the scan itself: single source of truth for the grid below ---
 tprim_vals = [4.2, 6.7]

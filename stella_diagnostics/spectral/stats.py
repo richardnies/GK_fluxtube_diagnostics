@@ -15,6 +15,52 @@ from os.path import exists
 from stella_diagnostics.grid import nearest_index
 
 
+def dt_weights(time):
+    """Local timestep at each sample in `time` (np.gradient(time)) --
+    UNNORMALIZED. Compute this on the actual set of sample times being
+    averaged over (already sliced/masked down to that set) -- every
+    time-averaging call site in this package already reduces `time` to a
+    contiguous slice or a monotonic-threshold boolean mask before
+    reaching this point, so np.gradient on that reduced array is exactly
+    the right per-sample spacing; only gradient-then-mask (not
+    mask-then-gradient) would silently double-count a gap, and no call
+    site here does that.
+
+    A single-sample `time` (a window narrower than the run's own
+    sampling interval, so only one frame falls inside it) has no local
+    spacing to estimate -- np.gradient itself raises on a length-1 array
+    -- so that case returns a single weight of 1 instead, correctly
+    reducing the weighted mean to that one sample's own value.
+    """
+    time = np.asarray(time, dtype=float)
+    if time.size <= 1:
+        return np.ones_like(time)
+    return np.gradient(time)
+
+
+def dt_weighted_mean(values, time=None, axis=0, weights=None):
+    """dt-weighted mean of `values` along `axis`, weighting each sample
+    by its local timestep (see dt_weights) instead of treating every
+    saved sample as covering an equal time interval -- stella's own
+    timestep can change over a run (e.g. during an adaptive-timestep
+    transient), so a plain np.mean/np.sum(...)/N over samples is only
+    correct on a uniform-dt run.
+
+    Pass `time` (the actual sample times for `values` along `axis`) to
+    have this compute weights via dt_weights(time) itself, or pass
+    `weights` directly -- e.g. a dt_weights(t) already computed once and
+    reused across several quantities sharing the same time axis in one
+    call site, to avoid recomputing np.gradient each time. Exactly one of
+    `time`/`weights` must be given.
+    """
+    if weights is None:
+        weights = dt_weights(time)
+    values = np.asarray(values)
+    shape = [1] * values.ndim
+    shape[axis] = len(weights)
+    return np.sum(values * weights.reshape(shape), axis=axis) / np.sum(weights)
+
+
 def read_avg_ky_rhoi(run, time_idx_jump=1, avg_qflx=False, normal_mean=False, take_max=False):
     time   = run.ncdata.variables['t'][::time_idx_jump]
     Ntime = len(time)

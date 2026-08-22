@@ -42,7 +42,9 @@ optionally:
     time_val_avg -- averaging window center (default None -> trailing
                     window ending at each run's own last time sample)
     kx_min       -- lower kx bound to plot (default 0.0)
-    kx_max       -- upper kx bound to plot (default 0.5)
+    kx_max       -- upper kx bound to plot (default 0.5, clamped to the
+                    kx grid's own largest positive value, across every
+                    run, if that's smaller)
     x_min        -- lower x/rho_i bound to plot (default None -> the real-
                     space x grid's own lower edge, across every run)
     x_max        -- upper x/rho_i bound to plot (default None -> the real-
@@ -53,6 +55,8 @@ optionally:
     eps          -- override the inverse aspect ratio (default None ->
                     estimated per-run from bmag via
                     stella_diagnostics.scan.zonal_flow_scan.estimate_eps_from_bmag)
+    figname_add  -- suffix appended before the default filename's
+                    extension (default "")
     figname      -- output filename (default "fig_zonal_upar_vE_kx.pdf")
 """
 import sys
@@ -64,6 +68,7 @@ from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
 from stella_diagnostics.scan.config import load_scan_config
 from stella_diagnostics.scan.zonal_flow_scan import estimate_eps_from_bmag
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
@@ -83,11 +88,13 @@ x_min = getattr(config, "x_min", None)
 x_max = getattr(config, "x_max", None)
 nx = getattr(config, "nx", None)
 eps_override = getattr(config, "eps", None)
+figname_add = getattr(config, "figname_add", "")
 
 fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(16, 13), sharex="col")
 (ax_ERH, ax_vE_x), (ax_eps, ax_upar_x), (ax_cos, ax_uparcos_x) = axs
 
 x_grid_min, x_grid_max = None, None
+kx_grid_max = None
 
 for i, dirname in enumerate(config.dirnames):
     label = labels[i]
@@ -147,6 +154,8 @@ for i, dirname in enumerate(config.dirnames):
     uparcos0 = uparcos_kx[:, 0]
     vE0 = -dxphi_kx[:, 0]
 
+    kx_grid_max = kx.max() if kx_grid_max is None else max(kx_grid_max, kx.max())
+
     # Same field-line- and time-averaged, zonal (ky=0) upar/vE as above, but
     # evaluated in real space (x) rather than reduced to kx.
     upar_x_y, x, _, _ = run.get_quantity_x_y(
@@ -167,7 +176,7 @@ for i, dirname in enumerate(config.dirnames):
     ax_uparcos_x.plot(x, -2 / q * uparcos_of_x, marker=".", label=label, c=color)
 
     E_RH_t_kx, time_E_RH, kx_E_RH = run.get_E_RH_t_kx(time_min=time_min_win, time_max=time_max_win, kx_max=1e5)
-    E_RH_kx = np.mean(E_RH_t_kx, axis=0)
+    E_RH_kx = dt_weighted_mean(E_RH_t_kx, time=time_E_RH, axis=0)
 
     mask = (kx > 0) & (kx >= kx_min) & (kx <= kx_max)
     mask_ERH = (kx_E_RH > 0) & (kx_E_RH >= kx_min) & (kx_E_RH <= kx_max)
@@ -191,7 +200,7 @@ ax_cos.set_ylabel(r"$-\frac{2}{q}\frac{\langle u_\parallel\cos\theta\rangle}{\la
 ax_cos.set_xlabel(r"$k_x \rho_i$")
 ax_cos.grid(True)
 
-ax_cos.set_xlim([kx_min, kx_max])
+ax_cos.set_xlim([kx_min, min(kx_max, kx_grid_max)])
 
 ax_vE_x.set_ylabel(r"$\langle v_E\rangle$")
 ax_vE_x.grid(True)
@@ -207,4 +216,4 @@ ax_uparcos_x.grid(True)
 ax_uparcos_x.set_xlim([x_min if x_min is not None else x_grid_min, x_max if x_max is not None else x_grid_max])
 
 plt.tight_layout()
-fig.savefig(getattr(config, "figname", None) or "fig_zonal_upar_vE_kx.pdf")
+fig.savefig(getattr(config, "figname", None) or "fig_zonal_upar_vE_kx" + figname_add + ".pdf")

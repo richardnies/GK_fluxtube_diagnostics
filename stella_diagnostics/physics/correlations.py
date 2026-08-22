@@ -16,6 +16,7 @@ from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.cache import cached
 from stella_diagnostics.io.codes import get_rho_label
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def _periodic_shift_correlation(f_zed_x_y, dl_over_B_avg, axis, sum_other):
@@ -84,27 +85,28 @@ def plot_parallel_correlation_function(run, quantity="phi", time_idx=-1, time_av
     time = run.get_time_array(GX_big=True)
     time_max = time[time_idx]
     time_idx_min = nearest_index(time-(time_max-time_avg))-3
+    time_window = time[time_idx_min:time_idx]
 
     quantity_name = quantity
     if quantity_name == "phi":
         if run.code == "stella":
             # phi_vs_t(t, tube, zed, theta0, ky, ri)
-            quantity_data = np.mean(run.ncdata.variables['phi_vs_t'][time_idx_min:time_idx,0,:,:,:,:],axis=0) # zed-kx-ky-ri
+            quantity_data = dt_weighted_mean(run.ncdata.variables['phi_vs_t'][time_idx_min:time_idx,0,:,:,:,:], time=time_window, axis=0) # zed-kx-ky-ri
         elif run.code == "GX":
             if run.GX_old_version:
                 print("WARNING! You are loading Phi_z in GX, which had issues in early code versions.")
                 quantity_data = np.transpose( run.ncdata['Special']['Phi_z'], axes=[2,1,0,3] )
             else:
-                quantity_data = np.transpose( np.mean(run.ncdata_big['Diagnostics']['Phi'][time_idx_min:time_idx], axis=0) , axes=[2,1,0,3])
+                quantity_data = np.transpose( dt_weighted_mean(run.ncdata_big['Diagnostics']['Phi'][time_idx_min:time_idx], time=time_window, axis=0) , axes=[2,1,0,3])
         elif run.code == "GS2":
             quantity_data = np.transpose( run.ncdata.variables['phi'] , axes=[2,1,0,3] )
 
     elif quantity_name == "temperature":
         # temperature(t, species, tube, zed, kx, ky, ri)
-        quantity_data = np.mean(run.ncdata.variables['temperature'][time_idx_min:time_idx,0,0,:,:,:,:],axis=0) # zed-kx-ky-ri
+        quantity_data = dt_weighted_mean(run.ncdata.variables['temperature'][time_idx_min:time_idx,0,0,:,:,:,:], time=time_window, axis=0) # zed-kx-ky-ri
 
     elif quantity_name == "upar":
-        quantity_data = np.mean(run.ncdata.variables['upar'][time_idx_min:time_idx,0,0,:,:,:,:],axis=0) # zed-kx-ky-ri
+        quantity_data = dt_weighted_mean(run.ncdata.variables['upar'][time_idx_min:time_idx,0,0,:,:,:,:], time=time_window, axis=0) # zed-kx-ky-ri
     else:
         print("ENTER VALID QUANTITY!")
         return

@@ -22,6 +22,7 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.spectral.fft import get_fft_real_space
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.codes import get_nspecies
 
@@ -85,8 +86,7 @@ def get_quantity_zed_x_y(run, quantity, time_idx=-1, species_idx=0, time_val=Non
     # Pi_RH_even/Pi_RH_odd) still have an array-valued time_idx here even
     # though time_avg is None for the recursive call itself.
     if np.ndim(time_idx) > 0:
-        time_avg_vals = np.atleast_1d(time_eval)
-        dt_avg_vals   = np.gradient(time_avg_vals) if time_avg_vals.size > 1 else np.ones_like(time_avg_vals)
+        dt_avg_vals = dt_weights(np.atleast_1d(time_eval))
         
     if quantity=="phi":
         # phi_vs_t(t, tube, zed, theta0, ky, ri)
@@ -810,7 +810,7 @@ def get_quantity_zed_x_y(run, quantity, time_idx=-1, species_idx=0, time_val=Non
         # was array-valued (not gated on time_avg, see the dt_avg_vals
         # comment above).
         if np.ndim(time_idx) > 0:
-            f_zed_x_y = np.sum(f_t_zed_x_y*dt_avg_vals[:,None,None,None], axis=0)/np.sum(dt_avg_vals)
+            f_zed_x_y = dt_weighted_mean(f_t_zed_x_y, weights=dt_avg_vals, axis=0)
         else:
             f_zed_x_y = f_t_zed_x_y[0,:,:,:]
 
@@ -819,7 +819,7 @@ def get_quantity_zed_x_y(run, quantity, time_idx=-1, species_idx=0, time_val=Non
 
         # Time average -- same time_idx-shape-based condition as above.
         if np.ndim(time_idx) > 0:
-            f_zed_kx_ky_ri = np.sum(f_zed_kx_ky_ri*dt_avg_vals[:,None,None,None,None], axis=0)/np.sum(dt_avg_vals)
+            f_zed_kx_ky_ri = dt_weighted_mean(f_zed_kx_ky_ri, weights=dt_avg_vals, axis=0)
 
         # Filter out kx's
         f_zed_kx_ky_ri[:,np.abs(kx)>kx_lowpass_cutoff,:,:] = 0

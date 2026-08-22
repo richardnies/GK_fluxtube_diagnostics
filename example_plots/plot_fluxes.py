@@ -4,9 +4,10 @@ Usage:
     python plot_fluxes.py <config.py>
 
 <config.py> defines `dirname` (required, the run's directory) and
-optionally `filename`, `code`, `figname` -- same dirname/filename split as
-every other single-run driver in this package (changed from treating
-dirname as the full filename_base, for config-vocabulary consistency).
+optionally `filename`, `code`, `figname_add`, `figname` -- same
+dirname/filename split as every other single-run driver in this package
+(changed from treating dirname as the full filename_base, for
+config-vocabulary consistency).
 """
 import sys
 
@@ -31,4 +32,5 @@ axs = run.plot_flux_over_time()
 # the many-orders-of-magnitude span once it settles positive).
 axs[2].set_yscale("symlog")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", "fig_fluxes.pdf"))
+figname_add = getattr(config, "figname_add", "")
+plt.savefig(getattr(config, "figname", None) or "fig_fluxes" + figname_add + ".pdf")

@@ -17,6 +17,7 @@ one (vnew=0.0001), so each series is a single-run list.
 
 filename = "example"
 time_avg = 20
+figname_add = ""
 
 # --- the scan itself: single source of truth ---
 tprim_vals = [4.2, 6.7]

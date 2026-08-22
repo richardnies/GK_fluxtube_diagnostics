@@ -11,7 +11,7 @@ file and assign the result to `dirnames`) and optionally `filename`,
 `code`, `quantity`, `kx_order`, `mult_zed`, `y_val`, `time_min`/`time_max`
 (scalars, broadcast) or `time_min_vals`/`time_max_vals` (per-run lists),
 `time_idx_skip`, `normalise`, `only_zonal`, `remove_zonal`, `cmap`, `vmin`,
-`vmax`, `logarithmic`, `figname`.
+`vmax`, `logarithmic`, `figname_add`, `figname`.
 
 Unlike the original script, the quantity-dependent preset selection
 (which vmin/vmax/logarithmic/mult_zed/normalise go with which quantity)
@@ -48,6 +48,7 @@ cmap = getattr(config, "cmap", "coolwarm")
 vmin = getattr(config, "vmin", "symm")
 vmax = getattr(config, "vmax", "last")
 logarithmic = getattr(config, "logarithmic", False)
+figname_add = getattr(config, "figname_add", "")
 
 dirnames = config.dirnames
 n_dirs = len(dirnames)
@@ -100,5 +101,5 @@ if figname is None:
         figname += "_kxorder-%i" % kx_order
     if mult_zed == "vdriftx":
         figname += "_vdriftx"
-    figname += ".pdf"
+    figname += figname_add + ".pdf"
 plt.savefig(figname)

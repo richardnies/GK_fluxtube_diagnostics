@@ -13,6 +13,7 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.spectral.fft import get_fft_k
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 from stella_diagnostics.grid import nearest_index
 
 
@@ -47,7 +48,6 @@ def get_zonal_shearing_kx(run, time_min=0, time_max=1e5):
     time_idx_max = run.get_time_idx(time_max)
     time_all = run.get_time_array()
     time = time_all[time_idx_min:time_idx_max-1]
-    dt = time_all[time_idx_min+1:time_idx_max]-time_all[time_idx_min:time_idx_max-1]
     kx, _, _ = run.get_kx_ky_zed()
     Gamma0 = specialfunc.iv(0, kx**2/2) * np.exp(-kx**2/2)
 
@@ -74,13 +74,14 @@ def get_zonal_shearing_kx(run, time_min=0, time_max=1e5):
 
     dx2phiZ_t_kx = -(1-Gamma0) * (phiZ_t_kx_ri[:,:,0]+1j*phiZ_t_kx_ri[:,:,1])
 
-    dx2phiZ_stationary_kx_C = np.sum(dx2phiZ_t_kx*dt[:,None], axis=0)/np.sum(dt)
+    weights = dt_weights(time)
+    dx2phiZ_stationary_kx_C = dt_weighted_mean(dx2phiZ_t_kx, weights=weights, axis=0)
 
     gammaE2_stationary_kx = np.abs(dx2phiZ_stationary_kx_C)**2
 
-    gammaE2_timevar_kx = np.sum(np.abs(dx2phiZ_t_kx-dx2phiZ_stationary_kx_C[None,:])**2 *dt[:,None], axis=0)/np.sum(dt)
+    gammaE2_timevar_kx = dt_weighted_mean(np.abs(dx2phiZ_t_kx-dx2phiZ_stationary_kx_C[None,:])**2, weights=weights, axis=0)
 
-    gammaE2_tot_kx = np.sum(np.abs(dx2phiZ_t_kx)**2 *dt[:,None], axis=0)/np.sum(dt)
+    gammaE2_tot_kx = dt_weighted_mean(np.abs(dx2phiZ_t_kx)**2, weights=weights, axis=0)
 
     return gammaE2_tot_kx[kx>0], gammaE2_stationary_kx[kx>0], gammaE2_timevar_kx[kx>0], kx[kx>0]
 
@@ -182,7 +183,16 @@ def get_Reynolds_NZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip=1):
     time_idx_min = nearest_index(time-time_min)
     time_idx_max = nearest_index(time-time_max)
     time_idx_eval = np.arange(time_idx_min, time_idx_max, time_idx_skip)
-    dt = np.gradient(time)
+    # Weight each retained (possibly time_idx_skip-strided) frame by its
+    # own local spacing among the retained samples, and normalize by
+    # their total, not the whole run's -- np.gradient(time)[time_idx_eval]
+    # would (a) get the local spacing between full-resolution neighbors
+    # instead of between retained samples when time_idx_skip>1, and (b)
+    # np.sum(np.gradient(time)) sums over the ENTIRE run regardless of
+    # time_min/time_max, silently under-scaling this average by (window
+    # duration)/(full run duration) whenever the window is narrower than
+    # the whole run -- both confirmed bugs, not preserved.
+    weights = dt_weights(time[time_idx_eval])
 
     kx = run.ncdata['kx'][:]
     ky = run.ncdata['ky'][:]
@@ -197,7 +207,7 @@ def get_Reynolds_NZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip=1):
     # Time-average
     for i_time_idx, time_idx in enumerate(time_idx_eval):
         print("Evaluating reynolds contributions: time idx %5i/%5i" % (i_time_idx+1, len(time_idx_eval)), end="\r")
-    
+
         # Load phi and Pprp
         phi_zed_kx_ky,  zed, kx, ky, _  = run.get_quantity_zed_kx_ky("phi",           time_idx=time_idx)
         Pprp_zed_kx_ky,   _,  _,  _, _  = run.get_quantity_zed_kx_ky("pressure_perp", time_idx=time_idx)
@@ -210,12 +220,12 @@ def get_Reynolds_NZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip=1):
             mult_fac_zed_kx_ky = 0.5*dl_over_B_avg[:,None,None] * ((1j*kx[i_kx])**2 * np.conj(phiZ_zed_kx[:,i_kx]))[:,None,None] * nablaxnablaphi_zed_kx_ky
 
             delta_kx_vals = (np.arange(len(kx)) - i_kx)%(len(kx))
-            dEZ_dt_reynolds_phi_kx_ky  += np.sum(mult_fac_zed_kx_ky * np.conj( 1j*ky[None,None,:] *phi_zed_kx_ky[:,delta_kx_vals]) , axis=0) * dt[time_idx]
-            dEZ_dt_reynolds_Pprp_kx_ky += np.sum(mult_fac_zed_kx_ky * np.conj( 1j*ky[None,None,:]*Pprp_zed_kx_ky[:,delta_kx_vals]) , axis=0) * dt[time_idx]
+            dEZ_dt_reynolds_phi_kx_ky  += np.sum(mult_fac_zed_kx_ky * np.conj( 1j*ky[None,None,:] *phi_zed_kx_ky[:,delta_kx_vals]) , axis=0) * weights[i_time_idx]
+            dEZ_dt_reynolds_Pprp_kx_ky += np.sum(mult_fac_zed_kx_ky * np.conj( 1j*ky[None,None,:]*Pprp_zed_kx_ky[:,delta_kx_vals]) , axis=0) * weights[i_time_idx]
 
     # Correct time-normalisation to get average
-    dEZ_dt_reynolds_phi_kx_ky  = dEZ_dt_reynolds_phi_kx_ky  / np.sum(dt)
-    dEZ_dt_reynolds_Pprp_kx_ky = dEZ_dt_reynolds_Pprp_kx_ky / np.sum(dt)
+    dEZ_dt_reynolds_phi_kx_ky  = dEZ_dt_reynolds_phi_kx_ky  / np.sum(weights)
+    dEZ_dt_reynolds_Pprp_kx_ky = dEZ_dt_reynolds_Pprp_kx_ky / np.sum(weights)
     
     return kx, ky, dEZ_dt_reynolds_phi_kx_ky, dEZ_dt_reynolds_Pprp_kx_ky
 
@@ -229,7 +239,9 @@ def get_Reynolds_kz_kxNZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip
     time_idx_min = nearest_index(time-time_min)
     time_idx_max = nearest_index(time-time_max)
     time_idx_eval = np.arange(time_idx_min, time_idx_max, time_idx_skip)
-    dt = np.gradient(time)
+    # See get_Reynolds_NZ_spectrum's comment above for why this weights
+    # retained samples among themselves rather than np.gradient(time)[time_idx_eval]/np.sum(np.gradient(time)).
+    weights = dt_weights(time[time_idx_eval])
 
     kx = run.ncdata['kx'][:]
     ky = run.ncdata['ky'][:]
@@ -244,7 +256,7 @@ def get_Reynolds_kz_kxNZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip
     # Time-average
     for i_time_idx, time_idx in enumerate(time_idx_eval):
         print("Evaluating reynolds contributions: time idx %5i/%5i" % (i_time_idx+1, len(time_idx_eval)), end="\r")
-    
+
         # Load phi and Pprp
         phi_zed_kx_ky,  zed, kx, ky, _  = run.get_quantity_zed_kx_ky("phi",           time_idx=time_idx)
         Pprp_zed_kx_ky,   _,  _,  _, _  = run.get_quantity_zed_kx_ky("pressure_perp", time_idx=time_idx)
@@ -256,12 +268,12 @@ def get_Reynolds_kz_kxNZ_spectrum(run, time_min=0, time_max=99999, time_idx_skip
         for i_kz in range(len(kx)):
             for i_kx in range(len(kx)):
                 delta_i_kx = (i_kz - i_kx)%(len(kx))
-                dEZ_dt_reynolds_phi_kz_kx[ i_kz,i_kx] = np.sum(0.5*dl_over_B_avg[:,None]*(1j*kx[i_kz])**2*phiZ_zed_kz[:,i_kz,None]* nablaxnablaphi_zed_kx_ky[:,i_kx,:]*np.conj(1j*ky[None,None,:]* phi_zed_kx_ky[:,delta_i_kx,:])) * dt[time_idx]
-                dEZ_dt_reynolds_Pprp_kz_kx[i_kz,i_kx] = np.sum(0.5*dl_over_B_avg[:,None]*(1j*kx[i_kz])**2*phiZ_zed_kz[:,i_kz,None]* nablaxnablaphi_zed_kx_ky[:,i_kx,:]*np.conj(1j*ky[None,None,:]*Pprp_zed_kx_ky[:,delta_i_kx,:])) * dt[time_idx]
+                dEZ_dt_reynolds_phi_kz_kx[ i_kz,i_kx] += np.sum(0.5*dl_over_B_avg[:,None]*(1j*kx[i_kz])**2*phiZ_zed_kz[:,i_kz,None]* nablaxnablaphi_zed_kx_ky[:,i_kx,:]*np.conj(1j*ky[None,None,:]* phi_zed_kx_ky[:,delta_i_kx,:])) * weights[i_time_idx]
+                dEZ_dt_reynolds_Pprp_kz_kx[i_kz,i_kx] += np.sum(0.5*dl_over_B_avg[:,None]*(1j*kx[i_kz])**2*phiZ_zed_kz[:,i_kz,None]* nablaxnablaphi_zed_kx_ky[:,i_kx,:]*np.conj(1j*ky[None,None,:]*Pprp_zed_kx_ky[:,delta_i_kx,:])) * weights[i_time_idx]
 
     # Correct time-normalisation to get average
-    dEZ_dt_reynolds_phi_kz_kx  = dEZ_dt_reynolds_phi_kz_kx  / np.sum(dt)
-    dEZ_dt_reynolds_Pprp_kz_kx = dEZ_dt_reynolds_Pprp_kz_kx / np.sum(dt)
+    dEZ_dt_reynolds_phi_kz_kx  = dEZ_dt_reynolds_phi_kz_kx  / np.sum(weights)
+    dEZ_dt_reynolds_Pprp_kz_kx = dEZ_dt_reynolds_Pprp_kz_kx / np.sum(weights)
     
     return kx, dEZ_dt_reynolds_phi_kz_kx, dEZ_dt_reynolds_Pprp_kz_kx
 
@@ -427,20 +439,27 @@ def get_time_avg_zonal_energy_contributions_kx(run, time_min=0, time_max=1e10, t
             du_par_mom_tr_t_kx[i_time_idx, i_kx]             =  np.sum(dl_over_B_avg * 2*np.real(dxphi_zed_kx[:,i_kx]     *np.conj(par_mom_tr_zed_kx[:,i_kx]))) *2 # = vE*(dU/dt)_{NL}
             du_cos_par_mom_tr_t_kx[i_time_idx, i_kx]         =  np.sum(dl_costheta   * 2*np.real(dxphi_zed_kx[:,i_kx]     *np.conj(par_mom_tr_zed_kx[:,i_kx]))) *2 # = vE*(dU/dt)_{NL}*cos(theta)
 
-    # Time-average (note dt may vary over time)
-    dt = np.gradient(time_eval)
-    EZ_kx            = np.sum(EZ_t_kx*dt[:,None],           axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_reynolds_phi_nablax2_kx  = np.sum(dEZ_reynolds_phi_nablax2_t_kx*dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_reynolds_Pprp_nablax2_kx = np.sum(dEZ_reynolds_Pprp_nablax2_t_kx*dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_reynolds_phi_nablaxy_kx  = np.sum(dEZ_reynolds_phi_nablaxy_t_kx*dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_reynolds_Pprp_nablaxy_kx = np.sum(dEZ_reynolds_Pprp_nablaxy_t_kx*dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_vDx_P_kx     = np.sum(dEZ_vDx_P_t_kx   *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dEZ_upar_kx      = np.sum(dEZ_upar_t_kx    *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dE_mean_pressure_tr_kx = np.sum(dE_mean_pressure_tr_t_kx  *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dE_delt_pressure_tr_kx = np.sum(dE_delt_pressure_tr_t_kx  *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    dE_par_mom_tr_kx = np.sum(dE_par_mom_tr_t_kx  *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    du_par_mom_tr_kx = np.sum(du_par_mom_tr_t_kx  *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
-    du_cos_par_mom_tr_kx = np.sum(du_cos_par_mom_tr_t_kx  *dt[:,None], axis=0)/(time_eval[-1]-time_eval[0])
+    # Time-average (note dt may vary over time). Weighted mean, not
+    # sum(x*dt)/(time_eval[-1]-time_eval[0]) -- np.sum(np.gradient(t))
+    # only equals t[-1]-t[0] on a uniform grid, so the previous form
+    # silently assumed uniform dt despite weighting by the real (possibly
+    # non-uniform) np.gradient(t); dt_weighted_mean's own weights and
+    # normalisation always match, so this is a true weighted mean
+    # regardless of grid uniformity. Changes numeric output on a
+    # non-uniform-dt run (a real fix, not preserved).
+    weights = dt_weights(time_eval)
+    EZ_kx            = dt_weighted_mean(EZ_t_kx,           weights=weights, axis=0)
+    dEZ_reynolds_phi_nablax2_kx  = dt_weighted_mean(dEZ_reynolds_phi_nablax2_t_kx, weights=weights, axis=0)
+    dEZ_reynolds_Pprp_nablax2_kx = dt_weighted_mean(dEZ_reynolds_Pprp_nablax2_t_kx, weights=weights, axis=0)
+    dEZ_reynolds_phi_nablaxy_kx  = dt_weighted_mean(dEZ_reynolds_phi_nablaxy_t_kx, weights=weights, axis=0)
+    dEZ_reynolds_Pprp_nablaxy_kx = dt_weighted_mean(dEZ_reynolds_Pprp_nablaxy_t_kx, weights=weights, axis=0)
+    dEZ_vDx_P_kx     = dt_weighted_mean(dEZ_vDx_P_t_kx,    weights=weights, axis=0)
+    dEZ_upar_kx      = dt_weighted_mean(dEZ_upar_t_kx,     weights=weights, axis=0)
+    dE_mean_pressure_tr_kx = dt_weighted_mean(dE_mean_pressure_tr_t_kx,  weights=weights, axis=0)
+    dE_delt_pressure_tr_kx = dt_weighted_mean(dE_delt_pressure_tr_t_kx,  weights=weights, axis=0)
+    dE_par_mom_tr_kx = dt_weighted_mean(dE_par_mom_tr_t_kx,  weights=weights, axis=0)
+    du_par_mom_tr_kx = dt_weighted_mean(du_par_mom_tr_t_kx,  weights=weights, axis=0)
+    du_cos_par_mom_tr_kx = dt_weighted_mean(du_cos_par_mom_tr_t_kx,  weights=weights, axis=0)
 
     return kx, EZ_kx, dEZ_reynolds_phi_nablax2_kx, dEZ_reynolds_Pprp_nablax2_kx, dEZ_reynolds_phi_nablaxy_kx, dEZ_reynolds_Pprp_nablaxy_kx, dEZ_vDx_P_kx, dEZ_upar_kx, dE_mean_pressure_tr_kx, dE_delt_pressure_tr_kx, dE_par_mom_tr_kx, du_par_mom_tr_kx, du_cos_par_mom_tr_kx
 

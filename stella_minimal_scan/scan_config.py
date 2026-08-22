@@ -32,6 +32,12 @@ after the time window (along with `labels`/`colors`, one entry per
 dirname). tprim itself is never supplied here -- every consuming function
 reads it directly from each run's own netCDF output.
 
+`figname_add` (declared alongside the time window, like every other field
+shared across every script here) is a suffix every driver appends to its
+own default output filename, right before the extension -- one place to
+tag every figure this config produces (e.g. "_minimal_scan" here), instead
+of editing each driver's own figname.
+
 `time_avg` (20 here) is shared only by the scripts already confirmed safe
 for it (see run_config.py's docstring for the pre-existing
 get_quantity_zed_x_y bug this avoids).
@@ -52,6 +58,7 @@ filename = "example"
 time_min = 10
 time_max = 250
 time_avg = 20
+figname_add = "_minimal_scan"
 
 # --- the scan itself: single source of truth for every block below ---
 tprim_vals = [4.2, 6.7]
@@ -61,7 +68,6 @@ colors = ["mediumblue", "crimson"]
 
 # --- flux_time.py, geometry_compare_flux_tubes.py, kx_omega.py ---
 ylim = [1e-25, 1e3]
-figname_add = "_minimal_scan"
 quantity = "phi"
 kwargs = {}
 

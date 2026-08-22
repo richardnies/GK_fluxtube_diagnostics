@@ -13,6 +13,7 @@ import seaborn as sns
 from glob import glob
 from os.path import exists
 from stella_diagnostics.spectral.fft import get_fft_k
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def get_omega_s_k(run, ky_idx=0, kx_idx=0):
@@ -218,9 +219,9 @@ def get_quantity_zed_kx_ky(run, quantity, time_idx=-1, species_idx=0, time_val=N
        return f_zed_kx[:,:,None]*(1j*kx[None,:,None])**kx_order, zed, kx, ky, time_eval
 
     time_eval = time_all[time_idx]
-     
+
     if time_avg is not None:
-        f_zed_kx_ky_ri = np.mean(f_zed_kx_ky_ri, axis=0)
+        f_zed_kx_ky_ri = dt_weighted_mean(f_zed_kx_ky_ri, time=time_eval, axis=0)
 
     f_zed_kx_ky = f_zed_kx_ky_ri[:,:,:,0] + 1j*f_zed_kx_ky_ri[:,:,:,1]
 

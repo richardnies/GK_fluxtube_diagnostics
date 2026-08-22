@@ -7,7 +7,8 @@ Usage:
 default "CBC", is appended to each to build the RunCollection's
 filename_base list, same dirname/filename split as every other multi-run
 driver in this package) and optionally `filename`, `labels`, `codes`,
-`kwargs` (forwarded to plot_comparison_flux_tube_geometry), `figname`.
+`kwargs` (forwarded to plot_comparison_flux_tube_geometry), `figname_add`,
+`figname`.
 """
 import sys
 
@@ -24,6 +25,7 @@ set_default_style()
 config = load_scan_config(sys.argv[1])
 
 filename = getattr(config, "filename", "CBC")
+figname_add = getattr(config, "figname_add", "")
 scan = RunCollection(
     [d + "/" + filename for d in config.dirnames],
     labels=getattr(config, "labels", None),
@@ -31,4 +33,4 @@ scan = RunCollection(
 )
 axs = scan.plot_comparison_flux_tube_geometry(**getattr(config, "kwargs", {"zed_times_nfield_periods": True}))
 
-plt.savefig(getattr(config, "figname", "fig_comparison_flux_tube_geometry.pdf"))
+plt.savefig(getattr(config, "figname", None) or "fig_comparison_flux_tube_geometry" + figname_add + ".pdf")

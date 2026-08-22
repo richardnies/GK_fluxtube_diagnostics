@@ -11,7 +11,7 @@ Usage:
 one entry per dirname -- plus `tprim_vals`/`qinp_vals` and, for qinp_scan,
 `tprim_val_per_dir`; see plot_correlation_func_perp.py's docstring/config
 for the identical scan-definition shape) and optionally `quantities`,
-`figname_prefix`.
+`figname_prefix`, `figname_add`.
 
 Each dirname's actual run directory is resolved the same way as
 plot_correlation_func_perp.py: `<dirname>/run_tprim_val-<val>/<filename>`
@@ -115,6 +115,7 @@ xlim_ky = getattr(config, "xlim_ky", None)
 ylim_kx = getattr(config, "ylim_kx", None)
 xlim_kx = getattr(config, "xlim_kx", None)
 ylim_kx_unscaled = getattr(config, "ylim_kx_unscaled", None)
+figname_add = getattr(config, "figname_add", "")
 
 for quantity in quantities:
 
@@ -149,7 +150,7 @@ for quantity in quantities:
     ax.set_ylabel(r"$(\overline{\Delta \theta})_{k_y}$", labelpad=-30)
 
     fig_ky.tight_layout()
-    fig_ky.savefig(figname_prefix + "ky_" + quantity + ".pdf")
+    fig_ky.savefig(figname_prefix + "ky_" + quantity + figname_add + ".pdf")
 
     # Finish kx plot
     ax = ax_kx
@@ -162,7 +163,7 @@ for quantity in quantities:
     ax.set_ylabel(r"$(\overline{\Delta \theta})_{k_x}$", labelpad=-30)
 
     fig_kx.tight_layout()
-    fig_kx.savefig(figname_prefix + "kx_" + quantity + ".pdf")
+    fig_kx.savefig(figname_prefix + "kx_" + quantity + figname_add + ".pdf")
 
     # Finish kx unscaled plot
     ax = ax_kx_unscaled
@@ -173,4 +174,4 @@ for quantity in quantities:
     ax.set_ylabel(r"$\overline{\Delta \theta} \sim l_\parallel / qR$", labelpad=-30)
 
     fig_kx_unscaled.tight_layout()
-    fig_kx_unscaled.savefig(figname_prefix + "kx_" + quantity + "_unscaled.pdf")
+    fig_kx_unscaled.savefig(figname_prefix + "kx_" + quantity + "_unscaled" + figname_add + ".pdf")

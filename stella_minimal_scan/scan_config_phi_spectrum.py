@@ -19,6 +19,7 @@ code = "stella"
 # Trailing window matching run_tprim-4.2000/run_config.py's own
 # time_avg (the settled quasi-steady plateau, t=39..52).
 time_avg = 13
+figname_add = ""
 
 # --- the scan itself: single source of truth, as in scan_config.py ---
 # Deliberately just the higher-resolution run (run_tprim-6.7000 excluded,

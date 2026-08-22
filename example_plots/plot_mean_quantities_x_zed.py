@@ -6,7 +6,8 @@ Usage:
 
 <config.py> defines `dirnames` (2D list: dirnames[row][col], required),
 `row_titles`, `col_titles` (required), and optionally `filename`, `code`,
-`sharex`, `time_min`, `time_max`, `time_idx_step`, `figname_prefix`.
+`sharex`, `time_min`, `time_max`, `time_idx_step`, `figname_prefix`,
+`figname_add`.
 Empty-string entries in `dirnames` are placeholders for missing row/col
 combinations (skipped).
 
@@ -53,6 +54,7 @@ datanames = FULL_QUANTITIES_X_ZED["datanames"]
 Nrows = len(config.row_titles)
 Ncols = len(config.col_titles)
 figname_prefix = getattr(config, "figname_prefix", "fig_mean_quantities_x_zed")
+figname_add = getattr(config, "figname_add", "")
 
 for i_dataname, dataname in enumerate(datanames):
     label = labels[i_dataname]
@@ -113,5 +115,5 @@ for i_dataname, dataname in enumerate(datanames):
     axs[0, 0].legend(fontsize=18)
 
     plt.tight_layout()
-    fig.savefig(figname + ".pdf")
+    fig.savefig(figname + figname_add + ".pdf")
     plt.close()

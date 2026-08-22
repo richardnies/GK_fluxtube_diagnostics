@@ -22,6 +22,7 @@ from glob import glob
 from os.path import exists
 from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.codes import get_vt_label
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 from stella_diagnostics.plotting.mpl_helpers import resolve_vmin_vmax
 
 
@@ -196,7 +197,7 @@ def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=N
         time_idx_min = run.get_time_idx(time_min)
         time_idx_max = run.get_time_idx(time_max)
         time_idx_eval = np.arange(time_idx_min, time_idx_max)
-        dt_vals = np.gradient(time_all[time_idx_eval])
+        dt_vals = dt_weights(time_all[time_idx_eval])
 
     # gvmus(t, species, mu, vpa)
     if kx_min is None and kx_max is None:
@@ -245,7 +246,7 @@ def plot_contour_gvmu_vpa(run, fig=None, ax=None, time_idx=-1, vmin=None, vmax=N
     time   = run.ncdata.variables['t'][time_idx]
 
     if time_avg is not None:
-        gvmus = np.sum(gvmus*dt_vals[:,None,None], axis=0)/np.sum(dt_vals)
+        gvmus = dt_weighted_mean(gvmus, weights=dt_vals, axis=0)
 
     if plot_diff:
         try:

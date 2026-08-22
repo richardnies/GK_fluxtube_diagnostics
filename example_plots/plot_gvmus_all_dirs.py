@@ -5,7 +5,8 @@ Usage:
 
 <config.py> defines `dirnames` (2D list: dirnames[row][col], required),
 `row_titles`, `col_titles` (required), and optionally `filename`, `code`,
-`time_avg`, `kx_min`, `kx_max`, `nozonal`, `zonal`, `sharex`, `figname`.
+`time_avg`, `kx_min`, `kx_max`, `nozonal`, `zonal`, `sharex`, `figname_add`,
+`figname`.
 Empty-string entries in `dirnames` are placeholders for missing
 row/col combinations (skipped, matching the original scan_type blocks
 which used "" for cells that don't correspond to a real run).
@@ -33,6 +34,7 @@ kx_max = getattr(config, "kx_max", 0.2)
 time_avg = getattr(config, "time_avg", 300)
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+figname_add = getattr(config, "figname_add", "")
 
 label_kx = "" if kx_min is None and kx_max is None else r"$(%.2f < |k_x| < %.2f)$" % (kx_min, kx_max)
 
@@ -86,5 +88,5 @@ if figname is None:
     if zonal:
         figname += "_zonal"
     figname += "_dtavg-%i" % time_avg if kx_min is None and kx_max is None else "_dtavg-%i_kxmin-%.2f_kxmax-%.2f" % (time_avg, kx_min, kx_max)
-    figname += ".pdf"
+    figname += figname_add + ".pdf"
 fig.savefig(figname)

@@ -15,6 +15,7 @@ from os.path import exists
 from stella_diagnostics.grid import nearest_index
 from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 from stella_diagnostics.plotting.mpl_helpers import get_or_create_ax, resolve_vmin_vmax
+from stella_diagnostics.spectral.stats import dt_weighted_mean
 
 
 def read_phi_vs_zed(run, time_avg=None, time_idx=-1, normalise_phi=True, kx_idx=0, ky_idx=0, eval_real=True, squared=False, remove_zonal=False):
@@ -28,7 +29,8 @@ def read_phi_vs_zed(run, time_avg=None, time_idx=-1, normalise_phi=True, kx_idx=
 
         time   = run.ncdata.variables['t'][:]
         time_max = time[time_idx]
-        phi_vs_zed_theta0_ky_ri = np.mean( phi_vs_t_zed_theta0_ky_ri[time > time_max-time_avg], axis=0)
+        mask = time > time_max-time_avg
+        phi_vs_zed_theta0_ky_ri = dt_weighted_mean(phi_vs_t_zed_theta0_ky_ri[mask], time=time[mask], axis=0)
 
     if eval_real:
         phi_vs_zed_theta0_ky = phi_vs_zed_theta0_ky_ri[:,:,:,0]

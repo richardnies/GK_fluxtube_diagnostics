@@ -7,7 +7,7 @@ Usage:
 
 <config.py> defines `dirname` (required) and optionally `filename`, `code`,
 `time_min`, `time_max`, `time_idx_skip`, `kxmax_plot`, `omega_sep_vals`,
-`alt_slow_eval`, `figname`.
+`alt_slow_eval`, `figname_add`, `figname`.
 """
 import sys
 
@@ -32,6 +32,7 @@ time_idx_skip = getattr(config, "time_idx_skip", 1)
 kxmax_plot = getattr(config, "kxmax_plot", 1)
 omega_sep_vals = getattr(config, "omega_sep_vals", None)
 alt_slow_eval = getattr(config, "alt_slow_eval", True)
+figname_add = getattr(config, "figname_add", "")
 
 run = StellaRun(config.dirname + "/" + filename, code=code)
 
@@ -101,4 +102,4 @@ else:
 plt.tight_layout()
 
 dirname_string = config.dirname.replace("/", "_")
-fig.savefig(getattr(config, "figname", None) or "fig_dEZ_kx_" + dirname_string + ".pdf")
+fig.savefig(getattr(config, "figname", None) or "fig_dEZ_kx_" + dirname_string + figname_add + ".pdf")

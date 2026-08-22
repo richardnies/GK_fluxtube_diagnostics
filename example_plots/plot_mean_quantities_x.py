@@ -9,8 +9,9 @@ Usage:
 `row_titles`, `col_titles` (required), and optionally `filename`, `code`,
 `quantities_plot` ("Q", "P_RH_scatter", "P_RH", "Pi_RH", or "Z_profiles"),
 `scatter_vE_norm_pow`, `scatter_vE_excl_frac`, `sharex`, `time_min`,
-`time_max`, `time_idx_step`, `time_avg`, `figname`. Empty-string entries in
-`dirnames` are placeholders for missing row/col combinations (skipped).
+`time_max`, `time_idx_step`, `time_avg`, `figname_add`, `figname`.
+Empty-string entries in `dirnames` are placeholders for missing row/col
+combinations (skipped).
 
 `time_avg` here smooths each frame with a window CENTERED on that frame's
 own time -- see movie_quantities_x.py's docstring and
@@ -52,6 +53,7 @@ time_min = getattr(config, "time_min", 500)
 time_max = getattr(config, "time_max", 2000)
 time_idx_step = getattr(config, "time_idx_step", 2)
 time_avg = getattr(config, "time_avg", None)
+figname_add = getattr(config, "figname_add", "")
 
 Nrows = len(config.row_titles)
 Ncols = len(config.col_titles)
@@ -185,7 +187,7 @@ for i_col in range(Ncols):
 axs[0, 0].legend(fontsize=18)
 
 fig.tight_layout()
-fig.savefig(figname + "_" + quantities_plot + ".pdf")
+fig.savefig(figname + "_" + quantities_plot + figname_add + ".pdf")
 
 if quantities_plot in ["P_RH_scatter"]:
     ax_extra.set_xlabel(r"$v_E$")
@@ -198,6 +200,6 @@ if quantities_plot in ["P_RH_scatter"]:
         # already been saved regardless; only this companion figure is
         # skipped.
         fig_extra.tight_layout()
-        fig_extra.savefig("fig_PRH_nu.pdf")
+        fig_extra.savefig("fig_PRH_nu" + figname_add + ".pdf")
     except ValueError as e:
         print("Could not save fig_PRH_nu.pdf: " + str(e))

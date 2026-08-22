@@ -13,6 +13,7 @@ import numpy as np
 from stella_diagnostics.io.cache import cached
 from stella_diagnostics.io.codes import get_rho_label, get_vt_label
 from stella_diagnostics.physics.rosenbluth_hinton import get_E_RH_t_kx, get_P_RH_breakdown
+from stella_diagnostics.spectral.stats import dt_weighted_mean, dt_weights
 
 
 @cached(version=2)
@@ -120,21 +121,21 @@ def get_RH_per_kx_means(
             if D_hyper is not None:
                 P_RH_hyper_t_sumkx = P_RH_hyper_t_sumkx + np.sum(P_RH_hyper_t_kx, axis=1)
 
-        dt = np.gradient(t)
-        E_RH_mean_kx[idxs_kx] = np.mean(E_RH_t_kx * dt[:, None], axis=0) / np.mean(dt)
+        dt = dt_weights(t)
+        E_RH_mean_kx[idxs_kx] = dt_weighted_mean(E_RH_t_kx, weights=dt, axis=0)
         P_RH_num_mean_kx[idxs_kx] = (E_RH_t_kx[-1] - E_RH_t_kx[0]) / (t[-1] - t[0])
-        P_RH_even_mean_kx[idxs_kx] = np.mean(P_RH_even_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_odd_mean_kx[idxs_kx] = np.mean(P_RH_odd_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_phi_even_mean_kx[idxs_kx] = np.mean(P_RH_phi_even_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_phi_odd_mean_kx[idxs_kx] = np.mean(P_RH_phi_odd_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_apar_even_mean_kx[idxs_kx] = np.mean(P_RH_apar_even_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_apar_odd_mean_kx[idxs_kx] = np.mean(P_RH_apar_odd_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_bpar_even_mean_kx[idxs_kx] = np.mean(P_RH_bpar_even_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_bpar_odd_mean_kx[idxs_kx] = np.mean(P_RH_bpar_odd_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_coll_even_mean_kx[idxs_kx] = np.mean(P_RH_coll_even_t_kx * dt[:, None], axis=0) / np.mean(dt)
-        P_RH_coll_odd_mean_kx[idxs_kx] = np.mean(P_RH_coll_odd_t_kx * dt[:, None], axis=0) / np.mean(dt)
+        P_RH_even_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_even_t_kx, weights=dt, axis=0)
+        P_RH_odd_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_odd_t_kx, weights=dt, axis=0)
+        P_RH_phi_even_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_phi_even_t_kx, weights=dt, axis=0)
+        P_RH_phi_odd_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_phi_odd_t_kx, weights=dt, axis=0)
+        P_RH_apar_even_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_apar_even_t_kx, weights=dt, axis=0)
+        P_RH_apar_odd_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_apar_odd_t_kx, weights=dt, axis=0)
+        P_RH_bpar_even_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_bpar_even_t_kx, weights=dt, axis=0)
+        P_RH_bpar_odd_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_bpar_odd_t_kx, weights=dt, axis=0)
+        P_RH_coll_even_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_coll_even_t_kx, weights=dt, axis=0)
+        P_RH_coll_odd_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_coll_odd_t_kx, weights=dt, axis=0)
         if D_hyper is not None:
-            P_RH_hyper_mean_kx[idxs_kx] = np.mean(P_RH_hyper_t_kx * dt[:, None], axis=0) / np.mean(dt)
+            P_RH_hyper_mean_kx[idxs_kx] = dt_weighted_mean(P_RH_hyper_t_kx, weights=dt, axis=0)
 
         i_fig += 1
 
@@ -174,7 +175,7 @@ def _moving_average(f_t, t, dt, dt_val=20):
     for i_t, t_val in enumerate(t):
         idx_min = np.argmin(np.abs(t - (t_val - dt_val / 2)))
         idx_max = min(np.argmin(np.abs(t - (t_val + dt_val / 2))) + 1, len(t))
-        f_avg_t[i_t] = np.sum(f_t[idx_min:idx_max] * dt[idx_min:idx_max]) / np.sum(dt[idx_min:idx_max])
+        f_avg_t[i_t] = dt_weighted_mean(f_t[idx_min:idx_max], weights=dt[idx_min:idx_max])
     return f_avg_t
 
 
@@ -191,14 +192,14 @@ def plot_RH_per_kx_summary_vs_time(run, ylim_P_RH=None, linthresh=1e-4, fig=None
     """
     means = get_RH_per_kx_means(run, **kwargs)
     t = means["t"]
-    dt = np.gradient(t)
+    dt = dt_weights(t)
 
     if axs is None:
         fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(12, 16))
 
     axs[0].plot(t, means["E_RH_t_sumkx"], c="k", alpha=0.5)
     axs[0].set_ylabel(r"$\sum_{k_x} E_\mathrm{RH}$")
-    E_RH_sum_kx_mean = np.mean(means["E_RH_t_sumkx"] * dt) / np.mean(dt)
+    E_RH_sum_kx_mean = dt_weighted_mean(means["E_RH_t_sumkx"], weights=dt)
     axs[0].axhline(E_RH_sum_kx_mean, ls="--", c="k", alpha=0.5)
 
     if combine_fields:
@@ -217,20 +218,20 @@ def plot_RH_per_kx_summary_vs_time(run, ylim_P_RH=None, linthresh=1e-4, fig=None
 
     axs[1].plot(t, means["P_RH_coll_t_sumkx"], c="orange")
     P_RH_t_sumkx = means["P_RH_coll_t_sumkx"]
-    P_RH_coll_sum_kx_mean = np.mean(means["P_RH_coll_t_sumkx"] * dt) / np.mean(dt)
+    P_RH_coll_sum_kx_mean = dt_weighted_mean(means["P_RH_coll_t_sumkx"], weights=dt)
     P_RH_sum_kx_mean = P_RH_coll_sum_kx_mean
 
     for color, even_t, odd_t, math_label in field_entries:
         tot_t = even_t + odd_t
         P_RH_t_sumkx = P_RH_t_sumkx + tot_t
         if combine_even_odd:
-            mean_tot = np.mean(tot_t * dt) / np.mean(dt)
+            mean_tot = dt_weighted_mean(tot_t, weights=dt)
             P_RH_sum_kx_mean += mean_tot
             axs[1].plot(t, tot_t, c=color)
             axs[1].axhline(mean_tot, c=color, label=math_label)
         else:
-            mean_even = np.mean(even_t * dt) / np.mean(dt)
-            mean_odd  = np.mean(odd_t * dt) / np.mean(dt)
+            mean_even = dt_weighted_mean(even_t, weights=dt)
+            mean_odd  = dt_weighted_mean(odd_t, weights=dt)
             P_RH_sum_kx_mean += mean_even + mean_odd
             axs[1].plot(t, even_t, c=color, ls='-')
             axs[1].plot(t, odd_t,  c=color, ls='--')
@@ -240,7 +241,7 @@ def plot_RH_per_kx_summary_vs_time(run, ylim_P_RH=None, linthresh=1e-4, fig=None
     if means["has_hyper"]:
         axs[1].plot(t, means["P_RH_hyper_t_sumkx"], c="purple")
         P_RH_t_sumkx = P_RH_t_sumkx + means["P_RH_hyper_t_sumkx"]
-        P_RH_hyper_sum_kx_mean = np.mean(means["P_RH_hyper_t_sumkx"] * dt) / np.mean(dt)
+        P_RH_hyper_sum_kx_mean = dt_weighted_mean(means["P_RH_hyper_t_sumkx"], weights=dt)
         P_RH_sum_kx_mean += P_RH_hyper_sum_kx_mean
         axs[1].axhline(P_RH_hyper_sum_kx_mean, c="purple", label=r"Hyper")
 
@@ -255,7 +256,7 @@ def plot_RH_per_kx_summary_vs_time(run, ylim_P_RH=None, linthresh=1e-4, fig=None
         print(e)
 
     axs[1].plot(t, P_RH_sum_kx_num, c="c", ls="--", alpha=0.1)
-    P_RH_sum_kx_num_mean = np.mean(P_RH_sum_kx_num * dt) / np.mean(dt)
+    P_RH_sum_kx_num_mean = dt_weighted_mean(P_RH_sum_kx_num, weights=dt)
 
     axs[1].axhline(P_RH_coll_sum_kx_mean, c="orange", label=r"Coll.")
     axs[1].axhline(P_RH_sum_kx_mean, c="k", label=r"Total", alpha=0.5)

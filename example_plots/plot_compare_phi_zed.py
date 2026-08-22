@@ -8,7 +8,7 @@ for an akyminmax x nfield_periods sweep, build this as a plain Python list
 comprehension in the config file itself, e.g.
 `dirnames = [tpl % (aky, nfp) for aky in akyminmax_vals for nfp in nfield_periods_vals]`)
 and optionally `labels` (one per dirname, e.g. built the same way from a
-label template), `filename`, `figname`.
+label template), `filename`, `figname_add`, `figname`.
 """
 import sys
 
@@ -25,6 +25,7 @@ set_default_style()
 config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 filename = getattr(config, "filename", "CBC")
+figname_add = getattr(config, "figname_add", "")
 labels = getattr(config, "labels", [None] * len(config.dirnames))
 
 scan = RunCollection([d + "/" + filename for d in config.dirnames], labels)
@@ -32,4 +33,4 @@ scan.plot_phi_vs_zed(zed_times_nfield_periods=True)
 plt.xlabel(r"$\zeta$")
 plt.grid()
 plt.legend()
-plt.savefig(getattr(config, "figname", "fig_compare_phi_zed.pdf"))
+plt.savefig(getattr(config, "figname", None) or "fig_compare_phi_zed" + figname_add + ".pdf")

@@ -8,7 +8,7 @@ vnew -> LaTeX label string, e.g. {0.0001: r"$10^{-4}$"}), `vnew_dirs`
 (dict mapping vnew -> its directory-name suffix, e.g. {0.0001: "0.0001"}),
 `basedir` (the run directory prefix, e.g.
 "2026-.../run_..._vnew-"), all required, plus optionally `eps`,
-`filename`, `code`, `figname`, `time_min`, `time_max`, `kx_max`,
+`filename`, `code`, `figname_add`, `figname`, `time_min`, `time_max`, `kx_max`,
 `passing_trapped`, `fphi`, `fapar`, `fbpar`, `fcoll` (forwarded to
 get_RH_per_kx_means, see that function's own defaults).
 
@@ -37,6 +37,7 @@ config = load_scan_config(sys.argv[1], required=("vnew_vals", "tprim_vals", "vne
 eps = getattr(config, "eps", 0.18)
 filename = getattr(config, "filename", "CBC")
 code = getattr(config, "code", "stella")
+figname_add = getattr(config, "figname_add", "")
 rh_kwargs = {}
 for name in ("time_min", "time_max", "kx_max", "passing_trapped", "fphi", "fapar", "fbpar", "fcoll"):
     if hasattr(config, name):
@@ -67,4 +68,4 @@ ax.legend(fontsize=14)
 ax.set_ylim(ymin=0)
 
 plt.tight_layout()
-fig.savefig(getattr(config, "figname", "fig_P_RH_C_normalised.pdf"))
+fig.savefig(getattr(config, "figname", None) or "fig_P_RH_C_normalised" + figname_add + ".pdf")

@@ -7,7 +7,8 @@ Usage:
 `labels`, `filenames`, `code`, `ls`, `markers`, `qinp`, `aspect_ratio`,
 `kxmin`, `kxmax`, `fac_rescale`, `time_idx`, `time_avg`, `ylim` (default
 None, letting matplotlib autoscale -- the previous hardcoded `ymin=4`
-would silently clip any run whose E_zonal came out below 4), `figname`.
+would silently clip any run whose E_zonal came out below 4), `figname_add`,
+`figname`.
 `time_idx`/`time_avg` are forwarded to
 stella_diagnostics.scan.zonal_spectrum_scaling.get_Ezonal (a trailing
 window of width `time_avg` ending at `time[time_idx]`, or just the single
@@ -48,6 +49,7 @@ fac_rescale = getattr(config, "fac_rescale", 2 * 2.8**2)
 ylim = getattr(config, "ylim", None)
 time_idx = getattr(config, "time_idx", -1)
 time_avg = getattr(config, "time_avg", None)
+figname_add = getattr(config, "figname_add", "")
 
 tprim_vals = np.asarray(config.tprim_vals)
 colors_tprim = sns.color_palette("rocket", len(tprim_vals))
@@ -99,4 +101,4 @@ if ylim is not None:
     ax.set_ylim(ylim)
 
 plt.tight_layout()
-fig.savefig(getattr(config, "figname", "fig_phiZ_TS_qkappa2.pdf"))
+fig.savefig(getattr(config, "figname", None) or "fig_phiZ_TS_qkappa2" + figname_add + ".pdf")
