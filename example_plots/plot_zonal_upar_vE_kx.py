@@ -8,7 +8,8 @@ where <> is a field-line average (dl/B weighted, optionally *cos(theta))
 combined with a time average over the configured window, `v_E =
 -d(phi)/dx` (evaluated per-kx, i.e. i*kx*phi), `eps` is the inverse
 aspect ratio, and `q` is the safety factor. A third panel above the other
-two shows E_RH(kx) (log y-axis), time-averaged over that same window.
+two shows E_RH(kx) (log y-axis), time-averaged over that same window. The
+left column's kx-axis is log-scale (shared across all three panels).
 
 Only the real part of each ratio is plotted -- the imaginary part (a
 residual phase/GAM-oscillation artifact of a finite, not-fully-converged
@@ -41,7 +42,9 @@ optionally:
     time_avg     -- averaging window width (default 20)
     time_val_avg -- averaging window center (default None -> trailing
                     window ending at each run's own last time sample)
-    kx_min       -- lower kx bound to plot (default 0.0)
+    kx_min       -- lower kx bound to plot (default 0.0; the kx-axis is
+                    log-scale, so a value <= 0 is floored to half the
+                    smallest positive kx on the grid, across every run)
     kx_max       -- upper kx bound to plot (default 0.5, clamped to the
                     kx grid's own largest positive value, across every
                     run, if that's smaller)
@@ -95,6 +98,7 @@ fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(16, 13), sharex="col")
 
 x_grid_min, x_grid_max = None, None
 kx_grid_max = None
+kx_grid_min_positive = None
 
 for i, dirname in enumerate(config.dirnames):
     label = labels[i]
@@ -155,6 +159,9 @@ for i, dirname in enumerate(config.dirnames):
     vE0 = -dxphi_kx[:, 0]
 
     kx_grid_max = kx.max() if kx_grid_max is None else max(kx_grid_max, kx.max())
+    kx_positive = kx[kx > 0]
+    if kx_positive.size:
+        kx_grid_min_positive = kx_positive.min() if kx_grid_min_positive is None else min(kx_grid_min_positive, kx_positive.min())
 
     # Same field-line- and time-averaged, zonal (ky=0) upar/vE as above, but
     # evaluated in real space (x) rather than reduced to kx.
@@ -200,7 +207,12 @@ ax_cos.set_ylabel(r"$-\frac{2}{q}\frac{\langle u_\parallel\cos\theta\rangle}{\la
 ax_cos.set_xlabel(r"$k_x \rho_i$")
 ax_cos.grid(True)
 
-ax_cos.set_xlim([kx_min, min(kx_max, kx_grid_max)])
+ax_cos.set_xscale("log")
+# kx=0 is always excluded from what's plotted (see module docstring), and a
+# log axis can't include it either -- floor the lower bound at half the
+# smallest positive kx actually on the grid whenever kx_min itself is <= 0.
+kx_xlim_min = kx_min if kx_min > 0 else kx_grid_min_positive / 2
+ax_cos.set_xlim([kx_xlim_min, min(kx_max, kx_grid_max)])
 
 ax_vE_x.set_ylabel(r"$\langle v_E\rangle$")
 ax_vE_x.grid(True)
