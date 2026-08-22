@@ -1,8 +1,8 @@
 """Zonal (ky=0) Rosenbluth-Hinton residual-flow ratios vs kx, for one or
 more runs plotted as separate curves in the same axes:
 
-    -2*eps/q * <u_par> / <v_E>
-    -2/q     * <u_par*cos(theta)> / <v_E>
+    2*eps/q * <u_par> / <v_E>
+    2/q     * <u_par*cos(theta)> / <v_E>
 
 where <> is a field-line average (dl/B weighted, optionally *cos(theta))
 combined with a time average over the configured window, `v_E =
@@ -26,7 +26,7 @@ and plotted vs x for every run in one shared axes per quantity. Unlike the
 left column's kx-space ratios, these are not divided by v_E (that would
 be 0/0 pointwise in x for a real-valued profile) -- instead `<u_par>` and
 `<u_par*cos(theta)>` are scaled by the same prefactors as the left
-column's numerators (-2*eps/q and -2/q respectively) so the two columns'
+column's numerators (2*eps/q and 2/q respectively) so the two columns'
 row-2/row-3 traces are directly comparable in normalisation, and kx=0 is
 not excluded here (there is no x=0/0 singularity in real space).
 
@@ -43,8 +43,9 @@ optionally:
     time_val_avg -- averaging window center (default None -> trailing
                     window ending at each run's own last time sample)
     kx_min       -- lower kx bound to plot (default 0.0; the kx-axis is
-                    log-scale, so a value <= 0 is floored to half the
-                    smallest positive kx on the grid, across every run)
+                    log-scale, so a value <= 0 is floored to the smallest
+                    positive kx on the grid (across every run) divided
+                    by 1.5)
     kx_max       -- upper kx bound to plot (default 0.5, clamped to the
                     kx grid's own largest positive value, across every
                     run, if that's smaller)
@@ -179,8 +180,8 @@ for i, dirname in enumerate(config.dirnames):
     x_grid_max = x.max() if x_grid_max is None else max(x_grid_max, x.max())
 
     ax_vE_x.plot(x, vE_of_x, marker=".", label=label, c=color)
-    ax_upar_x.plot(x, -2 * eps / q * upar_of_x, marker=".", label=label, c=color)
-    ax_uparcos_x.plot(x, -2 / q * uparcos_of_x, marker=".", label=label, c=color)
+    ax_upar_x.plot(x, 2 * eps / q * upar_of_x, marker=".", label=label, c=color)
+    ax_uparcos_x.plot(x, 2 / q * uparcos_of_x, marker=".", label=label, c=color)
 
     E_RH_t_kx, time_E_RH, kx_E_RH = run.get_E_RH_t_kx(time_min=time_min_win, time_max=time_max_win, kx_max=1e5)
     E_RH_kx = dt_weighted_mean(E_RH_t_kx, time=time_E_RH, axis=0)
@@ -189,8 +190,8 @@ for i, dirname in enumerate(config.dirnames):
     mask_ERH = (kx_E_RH > 0) & (kx_E_RH >= kx_min) & (kx_E_RH <= kx_max)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        term_eps = np.real(-2 * eps / q * upar0 / vE0)
-        term_cos = np.real(-2 / q * uparcos0 / vE0)
+        term_eps = np.real(2 * eps / q * upar0 / vE0)
+        term_cos = np.real(2 / q * uparcos0 / vE0)
 
     ax_ERH.semilogy(kx_E_RH[mask_ERH], E_RH_kx[mask_ERH], marker=".", label=label, c=color)
     ax_eps.plot(kx[mask], term_eps[mask], marker=".", label=label, c=color)
@@ -200,28 +201,29 @@ ax_ERH.set_ylabel(r"$E_\mathrm{RH}$")
 ax_ERH.grid(True)
 ax_ERH.legend(fontsize=12)
 
-ax_eps.set_ylabel(r"$-\frac{2\epsilon}{q}\frac{\langle u_\parallel\rangle}{\langle v_E\rangle}$")
+ax_eps.set_ylabel(r"$\frac{2\epsilon}{q}\frac{\langle u_\parallel\rangle}{\langle v_E\rangle}$")
 ax_eps.grid(True)
 
-ax_cos.set_ylabel(r"$-\frac{2}{q}\frac{\langle u_\parallel\cos\theta\rangle}{\langle v_E\rangle}$")
+ax_cos.set_ylabel(r"$\frac{2}{q}\frac{\langle u_\parallel\cos\theta\rangle}{\langle v_E\rangle}$")
 ax_cos.set_xlabel(r"$k_x \rho_i$")
 ax_cos.grid(True)
 
 ax_cos.set_xscale("log")
 # kx=0 is always excluded from what's plotted (see module docstring), and a
-# log axis can't include it either -- floor the lower bound at half the
-# smallest positive kx actually on the grid whenever kx_min itself is <= 0.
-kx_xlim_min = kx_min if kx_min > 0 else kx_grid_min_positive / 2
+# log axis can't include it either -- floor the lower bound at the smallest
+# positive kx actually on the grid, divided by 1.5, whenever kx_min itself
+# is <= 0.
+kx_xlim_min = kx_min if kx_min > 0 else kx_grid_min_positive / 1.5
 ax_cos.set_xlim([kx_xlim_min, min(kx_max, kx_grid_max)])
 
 ax_vE_x.set_ylabel(r"$\langle v_E\rangle$")
 ax_vE_x.grid(True)
 ax_vE_x.legend(fontsize=12)
 
-ax_upar_x.set_ylabel(r"$-\frac{2\epsilon}{q}\langle u_\parallel\rangle$")
+ax_upar_x.set_ylabel(r"$\frac{2\epsilon}{q}\langle u_\parallel\rangle$")
 ax_upar_x.grid(True)
 
-ax_uparcos_x.set_ylabel(r"$-\frac{2}{q}\langle u_\parallel\cos\theta\rangle$")
+ax_uparcos_x.set_ylabel(r"$\frac{2}{q}\langle u_\parallel\cos\theta\rangle$")
 ax_uparcos_x.set_xlabel(r"$x/\rho_i$")
 ax_uparcos_x.grid(True)
 
