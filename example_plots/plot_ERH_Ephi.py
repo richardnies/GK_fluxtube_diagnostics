@@ -1,11 +1,14 @@
 """E_RH(tprim)/E_phi(tprim)/E_RH/E_phi/chihat/gammaE comparison across a
-set of base directories (each glob-discovered for run_tprim*00 runs).
+set of series (each a list of run directories at different R/L_T).
 
 Usage:
     python plot_ERH_Ephi.py <config.py>
 
-<config.py> defines `base_dirs`, `base_labels`, `aLT_lin_vals` (required,
-one linear-threshold value per base_dir -- typically built with
+<config.py> defines `dirnames`, `labels`, `aLT_lin_vals` (required;
+`dirnames` is a nested list, dirnames[i_series] = flat list of run
+directories in that series -- tprim is read directly from each run's own
+netCDF output, not supplied separately; `aLT_lin_vals` is one
+linear-threshold value per series, typically built with
 stella_diagnostics.physics.gradients.get_aLT_lin_analytic) and optionally
 `filename`, `code`, `time_avg`, `base_colors`, `markersize`, `figname`.
 
@@ -32,13 +35,13 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(sys.argv[1], required=("base_dirs", "base_labels", "aLT_lin_vals"))
+config = load_scan_config(sys.argv[1], required=("dirnames", "labels", "aLT_lin_vals"))
 
 time_avg = getattr(config, "time_avg", 800)
 
 fig, axs = plot_ERH_Ephi_vs_tprim(
-    config.base_dirs,
-    config.base_labels,
+    config.dirnames,
+    config.labels,
     config.aLT_lin_vals,
     filename=getattr(config, "filename", "CBC"),
     code=getattr(config, "code", "stella"),

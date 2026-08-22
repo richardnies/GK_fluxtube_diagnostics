@@ -26,9 +26,7 @@ def _dt_weighted_mean(x, t):
 
 
 def plot_qflx_vs_nu_scan(
-    dirs_nu,
-    vals_nu,
-    tprim_vals,
+    dirnames,
     filename="CBC",
     code="stella",
     time_avg=200,
@@ -42,9 +40,12 @@ def plot_qflx_vs_nu_scan(
     """Qflx(nu)/gammaE(nu)/vE_RH(nu)/upar(nu) comparison across a
     collisionality x tprim sweep, one errorbar/line series per tprim.
 
-    dirs_nu/vals_nu: parallel lists of base directories and their
-    collisionality (nu_ii) values; each run is
-    f"{dirs_nu[i]}/run_tprim-{tprim:.4f}/{filename}".
+    dirnames: nested list, dirnames[i_tprim] = flat list of run directories
+    (one collisionality-swept series). tprim (shared across a series, for
+    the legend/Delta_tprim) and nu_ii (per run, for the x-axis) are read
+    directly from each run's own netCDF output
+    (run.ncdata.variables["tprim"][0]/["vnew"][0], species-index-0 -- same
+    convention used throughout this package), not supplied separately.
     time_avg: trailing-window width (time units before the run's last
     sample) used both for the qflx average here and (as a fallback, and
     for the zonal-shear-profile fields) via
@@ -57,25 +58,29 @@ def plot_qflx_vs_nu_scan(
     import seaborn as sns
 
     if colors_tprim is None:
-        colors_tprim = sns.color_palette("rocket", len(tprim_vals))
+        colors_tprim = sns.color_palette("rocket", len(dirnames))
     if axs is None:
         fig, axs = plt.subplots(nrows=5, figsize=(9, 25))
 
     run = None  # stays None if every load below fails; guards the v_T label at the end
-    for i_tprim, tprim in enumerate(tprim_vals):
+    nu_shift = None
+    for i_tprim, series_dirnames in enumerate(dirnames):
         qflx_avg_nu, qflx_std_nu = [], []
         vE_RH_avg_nu, vE_avg_nu, gammaE_avg_nu, upar_avg_nu = [], [], [], []
         nu_plot = []
+        tprim = None
 
-        for i_nu, nu in enumerate(vals_nu):
-            dirname = dirs_nu[i_nu] + "/" + "run_tprim-%.4f" % tprim
-
+        for dirname in series_dirnames:
             try:
                 run = StellaRun(dirname + "/" + filename, code=code)
             except Exception as e:
                 print(e)
                 print("Could not load run for " + dirname)
                 continue
+
+            if tprim is None:
+                tprim = float(run.ncdata.variables["tprim"][0])
+            nu = float(run.ncdata.variables["vnew"][0])
 
             try:
                 _, vflx, qflx, time = run.get_fluxes_over_time(norm=False)
@@ -111,6 +116,10 @@ def plot_qflx_vs_nu_scan(
                 gammaE_avg_nu.append(None)
                 upar_avg_nu.append(None)
 
+        if tprim is None:
+            print("Could not load any run for tprim series %d" % i_tprim)
+            continue
+
         Delta_tprim = tprim - get_aLT_lin_analytic(rhoc=rhoc, q=q, shat=shat)
 
         idx_sort = np.argsort(nu_plot)
@@ -121,6 +130,9 @@ def plot_qflx_vs_nu_scan(
         vE_avg_nu = np.array(vE_avg_nu)[idx_sort]
         gammaE_avg_nu = np.array(gammaE_avg_nu)[idx_sort]
         upar_avg_nu = np.array(upar_avg_nu)[idx_sort]
+
+        if nu_shift is None or nu_plot[0] < nu_shift:
+            nu_shift = nu_plot[0]
 
         ax = axs[0]
         ax.errorbar(nu_plot[0], qflx_avg_nu[0] / Delta_tprim, qflx_std_nu[0] / Delta_tprim, c=colors_tprim[i_tprim], marker="s", markersize=20)
@@ -145,7 +157,6 @@ def plot_qflx_vs_nu_scan(
         except Exception:
             continue
 
-    nu_shift = vals_nu[0]
     nu_th = np.linspace(1e-4, 1e-2, 100)
     for i in (1, 2, 3):
         axs[i].plot(nu_th, (nu_th / 1e-4) ** (-1 / 2), ls="--", c="0.5", label=r"$\propto \nu_{ii}^{-1/2}$")
@@ -190,8 +201,8 @@ def _gamma0_kx_only(kx):
 
 
 def plot_ERH_Ephi_vs_tprim(
-    base_dirs,
-    base_labels,
+    dirnames,
+    labels,
     aLT_lin_vals,
     filename="CBC",
     code="stella",
@@ -202,35 +213,36 @@ def plot_ERH_Ephi_vs_tprim(
     axs=None,
 ):
     """E_RH(tprim)/E_phi(tprim)/E_RH/E_phi/chihat/gammaE comparison across a
-    set of base_dirs, each glob-discovered for run_tprim*00 subdirectories,
-    one series per base_dir.
+    set of series, one series per outer dirnames entry.
 
-    aLT_lin_vals: one linear critical-gradient value per base_dir (typically
-    from get_aLT_lin_analytic), subtracted from that dir's tprim values.
+    dirnames: nested list, dirnames[i_series] = flat list of run directories
+    in that series. tprim is read directly from each run's own netCDF
+    output (via get_growth_rate_from_flux), not supplied separately; each
+    series is sorted by that value internally, so caller order within a
+    series doesn't matter.
+    aLT_lin_vals: one linear critical-gradient value per series (typically
+    from get_aLT_lin_analytic), subtracted from that series' tprim values.
     time_avg: trailing-window width (time units before the run's last
     sample), shared across qflx/gammaE (via zonal_flow_scan's own
     matching trailing-from-run-end convention) and the E_RH/E_phi
     integrals computed directly in this function.
     Returns (fig, axs) with 5 panels: E_RH, E_phi, E_RH/E_phi, chihat
-    (normalized to the last dir's own largest-R/L_T value), gammaE.
+    (normalized to the last series' own largest-R/L_T value), gammaE.
     """
-    from glob import glob
-
     import seaborn as sns
 
     if base_colors is None:
-        base_colors = sns.color_palette("rocket", len(base_dirs))
+        base_colors = sns.color_palette("rocket", len(dirnames))
     if axs is None:
         fig, axs = plt.subplots(nrows=5, figsize=(9, 25))
 
     chihat_norm = None
 
-    for i_base, base_dir in enumerate(base_dirs):
-        label = base_labels[i_base]
-        color = base_colors[i_base]
+    for i_series, series_dirnames in enumerate(dirnames):
+        label = labels[i_series]
+        color = base_colors[i_series]
 
-        dirnames = sorted(glob(base_dir + "/run_tprim*00/"))
-        ndirs = len(dirnames)
+        ndirs = len(series_dirnames)
 
         tprim_vals = np.zeros(ndirs)
         qinp_vals = np.zeros(ndirs)
@@ -241,7 +253,7 @@ def plot_ERH_Ephi_vs_tprim(
         ERH_vals = np.zeros(ndirs)
         Ephi_vals = np.zeros(ndirs)
 
-        for i_dir, dirname in enumerate(dirnames):
+        for i_dir, dirname in enumerate(series_dirnames):
             try:
                 run = StellaRun(dirname + "/" + filename, code=code)
 
@@ -278,7 +290,17 @@ def plot_ERH_Ephi_vs_tprim(
                 ERH_vals[i_dir] = np.nan
                 Ephi_vals[i_dir] = np.nan
 
-        tprim_vals += -aLT_lin_vals[i_base]
+        idx_sort = np.argsort(tprim_vals)
+        tprim_vals = tprim_vals[idx_sort]
+        qinp_vals = qinp_vals[idx_sort]
+        eps_vals = eps_vals[idx_sort]
+        qflx_avg_vals = qflx_avg_vals[idx_sort]
+        gammaE_avg_vals = gammaE_avg_vals[idx_sort]
+        gammaE_std_vals = gammaE_std_vals[idx_sort]
+        ERH_vals = ERH_vals[idx_sort]
+        Ephi_vals = Ephi_vals[idx_sort]
+
+        tprim_vals += -aLT_lin_vals[i_series]
 
         ax = axs[0]
         ax.plot(tprim_vals, ERH_vals, c=color, marker="o", markersize=markersize, label=label)

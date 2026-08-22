@@ -269,15 +269,25 @@ a full worked example: `run_tprim-4.2000/run_config.py` and
 `run_tprim-6.7000/run_config.py` (one per run directory, each pointed at
 by `dirname` relative to `stella_minimal_scan/` -- not `"."`, since the
 driver is invoked from there, not from inside the run directory), plus
-`scan_config.py` and `scan_config_grid.py` at the top level (two, not
-one, because `plot_gvmus_all_dirs.py`/`plot_mean_quantities_x.py`/
-`plot_mean_quantities_x_zed.py` expect `dirnames` as a nested
-`dirnames[row][col]` grid while the other multi-run drivers expect a flat
-list under the same field name -- a real, pre-existing structural
-incompatibility between those scripts' config contracts, not something
-one shared file can paper over; see `scan_config_grid.py`'s docstring).
-Read either `run_config.py`'s docstring for the full field rationale,
-including which fields are deliberately left out.
+`scan_config.py`, `scan_config_grid.py`, `scan_config_series.py`,
+`scan_config_flux_coll.py`, and `scan_config_phi_spectrum.py`/
+`scan_phi_spectrum_config.py` at the top level -- every multi-run driver
+takes directories the same way, `dirnames` (a flat list of run
+directories, or a nested list-of-lists for scripts that plot one
+series/grid-row/figure per outer entry), with tprim read directly from
+each run's own netCDF output rather than supplied in config. Split across
+several files only because the *nesting* a given script needs genuinely
+differs (`plot_gvmus_all_dirs.py`/`plot_mean_quantities_x.py`/
+`plot_mean_quantities_x_zed.py` want `dirnames[row][col]`;
+`plot_ERH_Ephi.py`/`plot_param_scan_Dimits.py`/
+`plot_contour_phi_vs_t_zed.py` want `dirnames[i_series]` with the *same*
+value but can't share a file with the grid scripts because
+`mean_quantities_x_zed.py`'s own `labels` field means something else
+there; `plot_flux_coll.py` and `plot_compare_growth_rates.py` each want
+`dirnames` nested the *other* way round; `plot_phi_spectrum_compare.py`
+wants one flat list per output figure) -- see each file's own docstring
+for the exact reasoning. Read either `run_config.py`'s docstring for the
+full field rationale, including which fields are deliberately left out.
 
 #### Canonical time-averaging vocabulary
 
@@ -365,7 +375,7 @@ are just worked examples, not a fixed list.
 | `movie_quantities_x_zed.py` | `run_config.py`* | Movie: several (zed, x) quantity contours, + time-averaged summary |
 | `plot_mean_quantities_x_zed.py` | `scan_config_grid.py`* | Grid of time-averaged (zed, x) quantity contours, one figure per quantity |
 | `movie_quantity_real_space.py` | `run_config.py`* | Movie: one quantity in (x, y) at several zed slices, with zonal overlay |
-| `plot_param_scan_Dimits.py` | `scan_config.py`* | 15-panel R/L_T scan: heat flux, ExB shear, RH power transfer vs tprim |
+| `plot_param_scan_Dimits.py` | `scan_config_series.py`* | 15-panel R/L_T scan: heat flux, ExB shear, RH power transfer vs tprim |
 | `plot_zonal_shear_diagnostic.py` | `run_config.py`* | Rich single-run diagnostic page (heat flux/growth rate/shear/RH power) |
 | `plot_zonal_distribution.py` | *(no config file -- edit the CONFIG block at the bottom, see below)* | g(vpa, mu) zonal-mode heatmaps read directly from restart files |
 

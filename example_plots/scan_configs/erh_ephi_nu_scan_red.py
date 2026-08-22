@@ -5,11 +5,13 @@ this migration). Run with:
 import numpy as np
 
 from stella_diagnostics.physics.gradients import get_aLT_lin_analytic
+from stella_diagnostics.scan.config import discover_runs
 
 _base = "2026-06-26_scan_qinp-1.4_shat-0.8_rmaj-1.000_rhoc-0.18_fprim-2.2_vnew-"
+_base_dirs = [_base + "0", _base + "0.0001", _base + "0.001"]
 
-base_dirs = [_base + "0", _base + "0.0001", _base + "0.001"]
-base_labels = [r"$\nu^*=0$", r"$\nu^*=10^{-4}$", r"$\nu^*=10^{-3}$"]
+dirnames = [discover_runs(bd, pattern="run_tprim*00") for bd in _base_dirs]
+labels = [r"$\nu^*=0$", r"$\nu^*=10^{-4}$", r"$\nu^*=10^{-3}$"]
 aLT_lin_vals = get_aLT_lin_analytic(
     rhoc=np.array([0.18, 0.18, 0.18]),
     q=np.array([1.4, 1.4, 1.4]),

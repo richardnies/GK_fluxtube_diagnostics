@@ -10,9 +10,11 @@ this minimal example, not a config-driven-migration bug: the same
 function, called the same way, would need a run with a less coarse
 k-grid to actually exercise this code path.
 """
-dirname_mode = "nu0_only"
-tprim_vals = [4.2, 6.7]
-dirs = {"dir_1": "./"}
 filename = "example"
 time_avg = None
 load_from_file = False
+
+# --- the scan itself: single source of truth, as in scan_config.py ---
+# Two figure groups (one per tprim), each a single run. tprim is read
+# directly from each run's own netCDF output, not supplied separately.
+dirnames = [["run_tprim-4.2000"], ["run_tprim-6.7000"]]

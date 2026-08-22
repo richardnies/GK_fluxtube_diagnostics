@@ -788,13 +788,12 @@ def plot_zonal_shear_diagnostic_page(
 
 
 def plot_zonal_flow_scan(
-    base_dirs,
-    base_labels,
+    dirnames,
+    series_labels,
     aLT_lin_vals=None,
     base_colors=None,
     tprim_exclude=None,
     substract_lin=False,
-    tprim_val=None,
     xlim=None,
     markersize=10,
     filename="CBC",
@@ -809,10 +808,16 @@ def plot_zonal_flow_scan(
     fig=None,
     axs=None,
 ):
-    """15-panel R/L_T scan comparison, one series per base_dir (each
-    glob-discovered for run_tprim*00 subdirectories, matching
-    stella_diagnostics.scan.rh_flux_scan.plot_ERH_Ephi_vs_tprim's
+    """15-panel R/L_T scan comparison, one series per outer dirnames entry
+    (matching stella_diagnostics.scan.rh_flux_scan.plot_ERH_Ephi_vs_tprim's
     convention).
+
+    dirnames: nested list, dirnames[i_series] = flat list of run directories
+    in that series. tprim is read directly from each run's own netCDF
+    output (via get_growth_rate_from_flux), not supplied separately; each
+    series is sorted by that value internally, so caller order within a
+    series doesn't matter. A config that wants a single run instead of a
+    whole series just passes a single-entry inner list.
 
     Per run, get_growth_rate_from_flux/estimate_eps_from_bmag/
     get_zonal_shear_profiles/get_RH_power_transfer_profiles/
@@ -834,31 +839,24 @@ def plot_zonal_flow_scan(
     matching the original exactly; the remaining panels plot the raw
     (possibly-nan) arrays, relying on nan values not being drawn.
     """
-    from glob import glob
-
     import seaborn as sns
 
     if aLT_lin_vals is None:
-        aLT_lin_vals = np.zeros(len(base_dirs))
+        aLT_lin_vals = np.zeros(len(dirnames))
     if tprim_exclude is None:
         tprim_exclude = []
     if base_colors is None:
-        base_colors = sns.color_palette("rocket", len(base_dirs))
+        base_colors = sns.color_palette("rocket", len(dirnames))
 
     nrows = 15
     if axs is None:
         fig, axs = plt.subplots(nrows=nrows, figsize=(8, 4 * nrows))
 
-    for i_base, base_dir in enumerate(base_dirs):
-        label = base_labels[i_base]
-        color = base_colors[i_base]
+    for i_series, series_dirnames in enumerate(dirnames):
+        label = series_labels[i_series]
+        color = base_colors[i_series]
 
-        if tprim_val is None:
-            dirnames = sorted(glob(base_dir + "/run_tprim*00/"))
-        else:
-            dirnames = [base_dir + "/run_tprim-%.4f/" % (tprim_val)]
-
-        ndirs = len(dirnames)
+        ndirs = len(series_dirnames)
 
         tprim_vals = np.full(ndirs, np.nan)
         qinp_vals = np.full(ndirs, np.nan)
@@ -884,8 +882,8 @@ def plot_zonal_flow_scan(
         P_RH_coll_avg_LW_vals = np.full(ndirs, np.nan)
         dyphi2_avg_vals = np.full(ndirs, np.nan)
 
-        run = None  # stays None if dirnames is empty or every load fails; guards the v_T label below
-        for i_dir, dirname in enumerate(dirnames):
+        run = None  # stays None if series_dirnames is empty or every load fails; guards the v_T label below
+        for i_dir, dirname in enumerate(series_dirnames):
             try:
                 run = StellaRun(dirname + "/" + filename, code=code)
             except Exception as e:
@@ -946,8 +944,30 @@ def plot_zonal_flow_scan(
                 print(e)
                 print("Could not compute RH power time averages for " + dirname)
 
+        # Directories may arrive in any order (previously implicit via
+        # sorted(glob(...)) sorting by directory name); sort every parallel
+        # array by the tprim actually read from each run instead.
+        idx_sort = np.argsort(tprim_vals)
+        (
+            tprim_vals, qinp_vals, eps_vals, qflx_avg_vals, qflx_std_vals,
+            gammaE_avg_vals, gammaE_std_vals, gammaE_LW_avg_vals, gammaE_LW_std_vals,
+            upar_avg_vals, vE_avg_vals, vE_RH_avg_vals, uparcos_avg_vals, dxT_avg_vals,
+            gammaE_RH_avg_vals, gamma_lin_max_vals, P_RH_even_avg_vals, P_RH_odd_avg_vals,
+            P_RH_coll_avg_vals, P_RH_even_avg_LW_vals, P_RH_odd_avg_LW_vals,
+            P_RH_coll_avg_LW_vals, dyphi2_avg_vals,
+        ) = (
+            arr[idx_sort] for arr in (
+                tprim_vals, qinp_vals, eps_vals, qflx_avg_vals, qflx_std_vals,
+                gammaE_avg_vals, gammaE_std_vals, gammaE_LW_avg_vals, gammaE_LW_std_vals,
+                upar_avg_vals, vE_avg_vals, vE_RH_avg_vals, uparcos_avg_vals, dxT_avg_vals,
+                gammaE_RH_avg_vals, gamma_lin_max_vals, P_RH_even_avg_vals, P_RH_odd_avg_vals,
+                P_RH_coll_avg_vals, P_RH_even_avg_LW_vals, P_RH_odd_avg_LW_vals,
+                P_RH_coll_avg_LW_vals, dyphi2_avg_vals,
+            )
+        )
+
         if substract_lin:
-            tprim_vals = tprim_vals - aLT_lin_vals[i_base]
+            tprim_vals = tprim_vals - aLT_lin_vals[i_series]
 
         mask = np.isfinite(qflx_avg_vals) & ~np.isin(tprim_vals, tprim_exclude)
 
@@ -969,7 +989,7 @@ def plot_zonal_flow_scan(
         # Flow shear and max linear growth rate
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             vt_label = get_vt_label(run.ncdata) if run is not None else "T"
             labels = [r"$\gamma_E \, R/%s$" % vt_label, r"$\gamma_{E, \mathrm{RH}} \, R/%s$" % vt_label, r"$\gamma_\mathrm{lin}^\mathrm{max} \, R / %s$" % vt_label]
         else:
@@ -987,7 +1007,7 @@ def plot_zonal_flow_scan(
         # LW Flow shear and max linear growth rate
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             vt_label = get_vt_label(run.ncdata) if run is not None else "T"
             labels = [r"$\gamma_E^\mathrm{LW} \, R/%s$" % vt_label, r"$\gamma_{E, \mathrm{RH}}^\mathrm{LW} \, R/%s$" % vt_label, r"$\gamma_\mathrm{lin}^\mathrm{max} \, R / %s$" % vt_label]
         else:
@@ -1003,7 +1023,7 @@ def plot_zonal_flow_scan(
         # P_RH/P_RH^+
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$-P_\mathrm{RH}^C/P_\mathrm{RH}^+$", r"$-P_\mathrm{RH}^-/P_\mathrm{RH}^+$", r"$-(P_\mathrm{RH}^C+P_\mathrm{RH}^-)/P_\mathrm{RH}^+$"]
         else:
             labels = [None, None, None]
@@ -1019,7 +1039,7 @@ def plot_zonal_flow_scan(
         # P_RH +-
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$P_\mathrm{RH}^+$", r"$-P_\mathrm{RH}^-$", r"$-P_\mathrm{RH}^C$"]
         else:
             labels = [None, None, None]
@@ -1036,7 +1056,7 @@ def plot_zonal_flow_scan(
         # P_RH (linear)
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$P_\mathrm{RH}^+$", r"$P_\mathrm{RH}^-$", r"$P_\mathrm{RH}$"]
         else:
             labels = [None, None, None]
@@ -1053,7 +1073,7 @@ def plot_zonal_flow_scan(
         # P_RH +- (LW)
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$P_\mathrm{RH}^+$ (LW)", r"$-P_\mathrm{RH}^-$ (LW)", r"$-P_\mathrm{RH}^C$ (LW)"]
         else:
             labels = [None, None, None]
@@ -1070,7 +1090,7 @@ def plot_zonal_flow_scan(
         # Zonal parallel flow
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$u_\parallel / (q/\epsilon \cdot v_E)$", r"$2 u_\parallel \cos\theta / (q v_E)$"]
         else:
             labels = [None, None, None]
@@ -1096,7 +1116,7 @@ def plot_zonal_flow_scan(
         # Zonal temperature gradient
         i += 1
         ax = axs[i]
-        if i_base == 0:
+        if i_series == 0:
             labels = [r"$v_\mathrm{dia}/v_E$"]
         else:
             labels = [None, None, None]

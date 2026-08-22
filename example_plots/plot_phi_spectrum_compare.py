@@ -1,21 +1,30 @@
-"""phi(k) spectrum comparisons (ky, kx nonzonal, kx zonal) across a tprim
-sweep, for one of several directory-selection modes (nu scan / qinp scan /
-convergence scan / single nu=0 run).
+"""phi(k) spectrum comparisons (ky, kx nonzonal, kx zonal) -- one figure
+group per outer `dirnames` entry (e.g. a nu scan, a qinp scan, a
+convergence check, or a single run).
 
 Usage:
     python plot_phi_spectrum_compare.py <config.py>
 
-<config.py> defines `tprim_vals`, `dirs` (a dict of named base
-directories), `dirname_mode` (one of "nu_scan", "qinp_scan",
-"convergence_scan", "nu0_only"), all required, plus optionally
-`scaling_theory_vals`, `W_instead_of_phi`, `lw`, `overplot_kx_ky`,
-`plot_legend`, `plot_alpha_spectrum`, `time_avg`, `load_from_file`,
-`plot_slides`, `add_arrows`, `colors`, `filename`, `code`, `ylim_ky`,
-`ylim_kx_nonzonal`, `ylim_kx_zonal`, `ylim_alpha_spectrum` (y-axis
-limits for the three spectrum panels and the alpha-spectrum variant of
-each -- all default None, letting matplotlib autoscale; these spectra
-span many orders of magnitude and vary a lot run to run, so a fixed
-window tuned for one scan can silently show a blank plot for another).
+<config.py> defines `dirnames` (required, nested list: dirnames[i_group] =
+flat list of run directories that make up one figure group) and optionally
+`labels` (nested, matching `dirnames`; per-line labels within each group --
+defaults to unlabeled), `figname_suffixes` (one string per group, appended
+to each group's output filenames alongside the tprim read from that
+group's own runs; defaults to ""), `scaling_theory_vals`,
+`W_instead_of_phi`, `lw`, `overplot_kx_ky`, `plot_legend`,
+`plot_alpha_spectrum`, `time_avg`, `load_from_file`, `plot_slides`,
+`add_arrows`, `colors`, `filename`, `code`, `ylim_ky`, `ylim_kx_nonzonal`,
+`ylim_kx_zonal`, `ylim_alpha_spectrum` (y-axis limits for the three
+spectrum panels and the alpha-spectrum variant of each -- all default
+None, letting matplotlib autoscale; these spectra span many orders of
+magnitude and vary a lot run to run, so a fixed window tuned for one scan
+can silently show a blank plot for another).
+
+tprim/qinp (for `tprim_norm_list`/`qinp_norm_list`, the scaling-theory
+normalization) are read directly from each resolved run's own netCDF
+output (run.ncdata.variables["tprim"][0]/["q"].getValue(),
+species-index-0 -- same convention used throughout this package), not
+supplied separately.
 
 `time_avg`: trailing-window width ending at the run's last sample --
 same convention as every other quantity-time-averaging function in this
@@ -26,6 +35,7 @@ from os.path import exists
 
 import matplotlib.pyplot as plt
 
+from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
 from stella_diagnostics.scan.config import load_scan_config
 from stella_diagnostics.scan.run_collection import RunCollection
@@ -34,7 +44,7 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(sys.argv[1], required=("tprim_vals", "dirs", "dirname_mode"))
+config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 fontsize_legend = 5
 W_instead_of_phi = getattr(config, "W_instead_of_phi", False)
@@ -54,45 +64,32 @@ ylim_ky = getattr(config, "ylim_ky", None)
 ylim_kx_nonzonal = getattr(config, "ylim_kx_nonzonal", None)
 ylim_kx_zonal = getattr(config, "ylim_kx_zonal", None)
 ylim_alpha_spectrum = getattr(config, "ylim_alpha_spectrum", None)
+figname_suffixes = getattr(config, "figname_suffixes", [""] * len(config.dirnames))
+group_labels = getattr(config, "labels", [[None] * len(d) for d in config.dirnames])
 
 figsize = (7, 4.5) if plot_slides else (4.5, 4.5)
 
 
-def _dirnames_labels_for(mode, dirs, tprim):
-    """Reproduces the 4 mutually-exclusive dirname-selection alternatives
-    that used to be toggled by (un)commenting lines in this script."""
-    if mode == "nu_scan":
-        dirnames = [dirs["dir_1"] + "run_tprim-%.4f" % tprim, dirs["dir_4"] + "run_tprim-%.4f" % tprim, dirs["dir_2"] + "run_tprim-%.4f" % tprim]
-        labels = [r"CBC ($\nu=0$)", r"CBC ($\nu=10^{-4}$)", r"CBC ($\nu=10^{-3}$)"]
-        return dirnames, labels, "_nu_scan_tprim-%.4f" % tprim
-    if mode == "qinp_scan":
-        dirnames = [dirs["dir_q_0"] + "run_tprim-%.4f" % tprim, dirs["dir_q_1"] + "run_tprim-%.4f" % tprim, dirs["dir_q_2"] + "run_tprim-%.4f" % tprim]
-        labels = [r"$q=0.7$", r"$q=1.4$", r"$q=2.8$"]
-        return dirnames, labels, "_qinp_scan_tprim-%.4f" % tprim
-    if mode == "convergence_scan":
-        dirnames = [dirs["dir_4"] + "run_tprim-%.4f" % tprim, dirs["dir_4"] + "run_tprim-%.4f_small_x0" % tprim]
-        labels = [r"Base case", r"Larger box"]
-        return dirnames, labels, "_convergence_scan_tprim-%.4f" % tprim
-    if mode == "nu0_only":
-        return [dirs["dir_1"] + "run_tprim-%.4f" % tprim], [None], "_tprim-%.4f" % tprim
-    raise ValueError(f"unknown dirname_mode: {mode!r}")
-
-
-for tprim in config.tprim_vals:
-    add_str = ("_W_instead_of_phi" if W_instead_of_phi else "")
-    dirnames, labels, suffix = _dirnames_labels_for(config.dirname_mode, config.dirs, tprim)
-    add_str += suffix
+for i_group, group_dirnames in enumerate(config.dirnames):
+    add_str = ("_W_instead_of_phi" if W_instead_of_phi else "") + figname_suffixes[i_group]
+    labels = group_labels[i_group]
 
     filenames_list, labels_list, tprim_list, qinp_list, codes_list = [], [], [], [], []
     colors_list = colors
-    for i_dir, dirname in enumerate(dirnames):
+    for i_dir, dirname in enumerate(group_dirnames):
         full_filename = dirname + "/" + filename
         if exists(full_filename + ".nc") or exists(full_filename + ".out.nc"):
+            run = StellaRun(full_filename, code=code)
             filenames_list.append(full_filename)
-            tprim_list.append(tprim)
+            tprim_list.append(float(run.ncdata.variables["tprim"][0]))
             labels_list.append(labels[i_dir])
-            qinp_list.append(1.4)
+            qinp_list.append(float(run.ncdata.variables["q"].getValue()))
             codes_list.append(code)
+
+    if not filenames_list:
+        print("No runs found for figure group %d" % i_group)
+        continue
+    add_str += "_tprim-%.4f" % tprim_list[0]
 
     for scaling_theory in scaling_theory_vals:
         scanObj = RunCollection(filenames_list, labels_list, codes_list)

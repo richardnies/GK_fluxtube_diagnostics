@@ -3,8 +3,12 @@ Run with:
     python ../plot_contour_quantity_vs_t_x.py contour_quantity_x_t_P_RH_tot.py
 """
 
-dirname_base = "2026-06-26_scan_qinp-1.4_shat-0.8_rmaj-1.000_rhoc-0.18_fprim-2.2_vnew-0"
-dirname_pattern = "run*00"
+from stella_diagnostics.scan.config import discover_runs
+
+dirnames = discover_runs(
+    "2026-06-26_scan_qinp-1.4_shat-0.8_rmaj-1.000_rhoc-0.18_fprim-2.2_vnew-0",
+    pattern="run*00",
+)
 
 quantity = "P_RH_tot"
 kx_order = 0

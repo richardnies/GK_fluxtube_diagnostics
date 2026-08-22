@@ -4,8 +4,11 @@ collisionality x tprim sweep.
 Usage:
     python plot_flux_coll.py <config.py>
 
-<config.py> defines `dirs_nu`, `vals_nu`, `tprim_vals` (required) and
-optionally `filename`, `code`, `time_avg`, `rhoc`, `q`, `shat`, `figname`.
+<config.py> defines `dirnames` (required, nested list: dirnames[i_tprim] =
+flat list of run directories in that collisionality-swept series -- tprim
+and nu_ii are read directly from each run's own netCDF output, not
+supplied separately) and optionally `filename`, `code`, `time_avg`,
+`rhoc`, `q`, `shat`, `figname`.
 
 `time_avg` is the trailing-window width (time units before each run's last
 sample), the same convention used across every quantity-time-averaging
@@ -31,14 +34,12 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(sys.argv[1], required=("dirs_nu", "vals_nu", "tprim_vals"))
+config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 time_avg = getattr(config, "time_avg", 200)
 
 fig, axs = plot_qflx_vs_nu_scan(
-    config.dirs_nu,
-    config.vals_nu,
-    config.tprim_vals,
+    config.dirnames,
     filename=getattr(config, "filename", "CBC"),
     code=getattr(config, "code", "stella"),
     time_avg=time_avg,

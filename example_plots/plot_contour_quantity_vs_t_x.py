@@ -1,16 +1,17 @@
-"""quantity(x, t) contour grid across a directory glob, with a Qflx/phi2
-overlay on each panel.
+"""quantity(x, t) contour grid across a set of run directories, with a
+Qflx/phi2 overlay on each panel.
 
 Usage:
     python plot_contour_quantity_vs_t_x.py <config.py>
 
-<config.py> defines `dirname_base` (required, base directory to glob for
-run subdirectories) and optionally `dirname_pattern` (glob pattern,
-default "run*00"), `filename`, `code`, `quantity`, `kx_order`, `mult_zed`,
-`y_val`, `time_min`/`time_max` (scalars, broadcast) or
-`time_min_vals`/`time_max_vals` (per-run lists), `time_idx_skip`,
-`normalise`, `only_zonal`, `remove_zonal`, `cmap`, `vmin`, `vmax`,
-`logarithmic`, `figname`.
+<config.py> defines `dirnames` (required, flat list of run directories --
+if a real scan wants glob-based discovery, call
+stella_diagnostics.scan.config.discover_runs(...) directly in the config
+file and assign the result to `dirnames`) and optionally `filename`,
+`code`, `quantity`, `kx_order`, `mult_zed`, `y_val`, `time_min`/`time_max`
+(scalars, broadcast) or `time_min_vals`/`time_max_vals` (per-run lists),
+`time_idx_skip`, `normalise`, `only_zonal`, `remove_zonal`, `cmap`, `vmin`,
+`vmax`, `logarithmic`, `figname`.
 
 Unlike the original script, the quantity-dependent preset selection
 (which vmin/vmax/logarithmic/mult_zed/normalise go with which quantity)
@@ -24,14 +25,14 @@ import matplotlib.pyplot as plt
 
 from stella_diagnostics.io.run import StellaRun
 from stella_diagnostics.plotting.mpl_helpers import set_default_style
-from stella_diagnostics.scan.config import discover_runs, load_scan_config
+from stella_diagnostics.scan.config import load_scan_config
 from stella_diagnostics.scan.quantity_x_t_overlay import add_qflx_phi2_overlay, get_quantity_x_t_title
 
 if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(sys.argv[1], required=("dirname_base",))
+config = load_scan_config(sys.argv[1], required=("dirnames",))
 
 quantity = getattr(config, "quantity", "phi")
 filename = getattr(config, "filename", "CBC")
@@ -48,7 +49,7 @@ vmin = getattr(config, "vmin", "symm")
 vmax = getattr(config, "vmax", "last")
 logarithmic = getattr(config, "logarithmic", False)
 
-dirnames = discover_runs(config.dirname_base, pattern=getattr(config, "dirname_pattern", "run*00"))
+dirnames = config.dirnames
 n_dirs = len(dirnames)
 time_min_vals = getattr(config, "time_min_vals", [getattr(config, "time_min", 0)] * n_dirs)
 time_max_vals = getattr(config, "time_max_vals", [getattr(config, "time_max", 5000)] * n_dirs)
@@ -66,13 +67,13 @@ for i_dirname, dirname in enumerate(dirnames):
             time_idx_skip=time_idx_skip, y_val=y_val, kx_order=kx_order, mult_zed=mult_zed,
             time_min=time_min_vals[i_dirname], time_max=time_max_vals[i_dirname],
         )
-        # NOTE: was dirname[len(config.dirname_base):], which silently
-        # mangled the title (e.g. "run_tprim-4.2000" -> "un_tprim-4.2000")
-        # whenever dirname_base is "." -- discover_runs joins base_dir and
-        # pattern via pathlib, which normalizes away a bare "." prefix, so
-        # dirname_base is then not actually a literal prefix of dirname
-        # even though it conceptually is one. os.path.basename is robust
-        # to that regardless of how dirname_base is spelled.
+        # NOTE: the original script built this title as
+        # dirname[len(dirname_base):], which silently mangled it (e.g.
+        # "run_tprim-4.2000" -> "un_tprim-4.2000") whenever the base
+        # directory prefix wasn't a literal string prefix of dirname (e.g.
+        # after glob-discovery normalized away a bare "." prefix).
+        # os.path.basename is robust to that regardless of how dirname is
+        # spelled or where it came from.
         ax.set_title(os.path.basename(dirname.rstrip("/")), fontsize=14)
         plt.colorbar(im, ax=ax)
 
@@ -88,7 +89,7 @@ plt.tight_layout()
 
 figname = getattr(config, "figname", None)
 if figname is None:
-    figname = "fig_contours_" + config.dirname_base + "_" + quantity + "_x_t"
+    figname = "fig_contours_" + quantity + "_x_t"
     if remove_zonal:
         figname += "_remove_zonal"
     if only_zonal:

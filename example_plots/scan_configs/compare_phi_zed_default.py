@@ -4,5 +4,7 @@
 
 akyminmax_vals = [0.1]
 nfield_periods_vals = [200, 250, 300, 400]
-filename_template = "run_akyminmax-%.4f_nfield_periods-%.4f/precise_QA"
-label_template = r"nfp = %.1f"
+filename = "precise_QA"
+
+dirnames = ["run_akyminmax-%.4f_nfield_periods-%.4f" % (aky, nfp) for aky in akyminmax_vals for nfp in nfield_periods_vals]
+labels = [r"nfp = %.1f" % nfp for aky in akyminmax_vals for nfp in nfield_periods_vals]

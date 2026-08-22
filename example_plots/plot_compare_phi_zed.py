@@ -1,12 +1,14 @@
-"""phi(zed) comparison across an akyminmax x nfield_periods sweep.
+"""phi(zed) comparison across a set of runs.
 
 Usage:
     python plot_compare_phi_zed.py <config.py>
 
-<config.py> defines `akyminmax_vals`, `nfield_periods_vals`,
-`filename_template` (%-format taking (aky_val, nfp_val)), and
-`label_template` (%-format taking nfp_val), all required, plus optionally
-`figname`.
+<config.py> defines `dirnames` (required, flat list of run directories --
+for an akyminmax x nfield_periods sweep, build this as a plain Python list
+comprehension in the config file itself, e.g.
+`dirnames = [tpl % (aky, nfp) for aky in akyminmax_vals for nfp in nfield_periods_vals]`)
+and optionally `labels` (one per dirname, e.g. built the same way from a
+label template), `filename`, `figname`.
 """
 import sys
 
@@ -20,19 +22,12 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(
-    sys.argv[1],
-    required=("akyminmax_vals", "nfield_periods_vals", "filename_template", "label_template"),
-)
+config = load_scan_config(sys.argv[1], required=("dirnames",))
 
-filenames = []
-labels = []
-for aky_val in config.akyminmax_vals:
-    for nfp_val in config.nfield_periods_vals:
-        filenames.append(config.filename_template % (aky_val, nfp_val))
-        labels.append(config.label_template % nfp_val)
+filename = getattr(config, "filename", "CBC")
+labels = getattr(config, "labels", [None] * len(config.dirnames))
 
-scan = RunCollection(filenames, labels)
+scan = RunCollection([d + "/" + filename for d in config.dirnames], labels)
 scan.plot_phi_vs_zed(zed_times_nfield_periods=True)
 plt.xlabel(r"$\zeta$")
 plt.grid()

@@ -1,15 +1,17 @@
 """15-panel R/L_T scan comparison: heat flux, ExB shear, Rosenbluth-Hinton
-power transfer, and zonal-flow diagnostics vs R/L_T, one series per
-base_dir.
+power transfer, and zonal-flow diagnostics vs R/L_T, one series per outer
+dirnames entry.
 
 Usage:
     python plot_param_scan_Dimits.py <config.py>
 
-<config.py> defines `base_dirs`, `base_labels` (required, parallel lists;
-each base_dir is glob-discovered for run_tprim*00 subdirectories) and
-optionally `filename`, `code`, `aLT_lin_vals`, `base_colors`,
-`tprim_exclude`, `substract_lin`, `tprim_val`, `xlim`, `markersize`,
-`time_val_avg`, `time_avg`, `time_max`, `qflx_rel_idx_min`,
+<config.py> defines `dirnames`, `labels` (required; `dirnames` is a nested
+list, dirnames[i_series] = flat list of run directories in that series --
+tprim is read directly from each run's own netCDF output, not supplied
+separately; a config that wants a single run instead of a whole series
+just passes a single-entry inner list) and optionally `filename`, `code`,
+`aLT_lin_vals`, `base_colors`, `tprim_exclude`, `substract_lin`, `xlim`,
+`markersize`, `time_val_avg`, `time_avg`, `time_max`, `qflx_rel_idx_min`,
 `qflx_rel_idx_max`, `kx_max`, `time_idx_skip`, `figname`.
 
 Filename kept matching the original driver's historical name (the "Dimits"
@@ -34,16 +36,15 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(sys.argv[1], required=("base_dirs", "base_labels"))
+config = load_scan_config(sys.argv[1], required=("dirnames", "labels"))
 
 fig, axs = plot_zonal_flow_scan(
-    config.base_dirs,
-    config.base_labels,
+    config.dirnames,
+    config.labels,
     aLT_lin_vals=getattr(config, "aLT_lin_vals", None),
     base_colors=getattr(config, "base_colors", None),
     tprim_exclude=getattr(config, "tprim_exclude", None),
     substract_lin=getattr(config, "substract_lin", False),
-    tprim_val=getattr(config, "tprim_val", None),
     xlim=getattr(config, "xlim", [3.6, 8.7]),
     markersize=getattr(config, "markersize", 10),
     filename=getattr(config, "filename", "CBC"),

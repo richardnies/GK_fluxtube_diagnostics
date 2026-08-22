@@ -1,11 +1,17 @@
-"""|phi|(zeta, t) contour grid across a zeta_center x akyminmax sweep.
+"""|phi|(zeta, t) contour grid across a 2D (row, col) sweep of runs.
 
 Usage:
     python plot_contour_phi_vs_t_zed.py <config.py>
 
-<config.py> defines `base_dirs`, `base_dir_titles`, `akyminmax_vals`,
-`tprim_val`, `filename_template` (%-format taking (base_dir, ky_val,
-tprim_val)), all required, plus optionally `figname`.
+<config.py> defines `dirnames` (2D list: dirnames[row][col], required),
+`row_titles`, `col_titles` (required -- matching
+plot_gvmus_all_dirs.py's grid convention; for a zeta_center x akyminmax
+sweep, format these directly in the config file, e.g.
+`col_titles = [r"$k_y\rho_i=%.2f$" % v for v in akyminmax_vals]`) and
+optionally `filename`, `code`, `figname`.
+
+tprim (for the figure suptitle/filename) is read directly from the first
+resolved run's own netCDF output, not supplied separately.
 
 NOTE: plot_contour_phi_zed_t does not exist on StellaRun/stellaDiagnostics
 (pre-existing bug, predates the restructure -- see README "Known issues").
@@ -27,13 +33,13 @@ if len(sys.argv) != 2:
     sys.exit(f"usage: python {sys.argv[0]} <config.py>")
 
 set_default_style()
-config = load_scan_config(
-    sys.argv[1],
-    required=("base_dirs", "base_dir_titles", "akyminmax_vals", "tprim_val", "filename_template"),
-)
+config = load_scan_config(sys.argv[1], required=("dirnames", "row_titles", "col_titles"))
 
-Ncols = len(config.akyminmax_vals)
-Nrows = len(config.base_dirs)
+filename = getattr(config, "filename", "CBC")
+code = getattr(config, "code", "stella")
+
+Nrows = len(config.row_titles)
+Ncols = len(config.col_titles)
 fig, axs = plt.subplots(nrows=Nrows, ncols=Ncols, figsize=(18, 20))
 # plt.subplots returns a bare Axes (Nrows==Ncols==1) or a 1D array
 # (exactly one of Nrows/Ncols is 1), not the 2D array axs[row, col]
@@ -42,16 +48,18 @@ axs = np.atleast_2d(axs)
 if Ncols == 1 and Nrows > 1:
     axs = axs.reshape(Nrows, 1)
 
-for i_base_dir, base_dir in enumerate(config.base_dirs):
-    for i_ky, ky_val in enumerate(config.akyminmax_vals):
-        filename = config.filename_template % (base_dir, ky_val, config.tprim_val)
-        run = StellaRun(filename, code=getattr(config, "code", "stella"))
+tprim = None
+for i_row in range(Nrows):
+    for i_col in range(Ncols):
+        run = StellaRun(config.dirnames[i_row][i_col] + "/" + filename, code=code)
+        if tprim is None:
+            tprim = float(run.ncdata.variables["tprim"][0])
 
-        ax = axs[i_base_dir, i_ky]
+        ax = axs[i_row, i_col]
         run.plot_contour_phi_zed_t(fig, ax, normalise_phi=True)
-        title = config.base_dir_titles[i_base_dir] + r", $k_y \rho_i = $ %.2f" % (ky_val)
+        title = config.row_titles[i_row] + ", " + config.col_titles[i_col]
         ax.set_title(title)
 
-fig.suptitle(r"$|\phi|(\zeta, t)$ for $a/L_T =$ %i" % (config.tprim_val))
+fig.suptitle(r"$|\phi|(\zeta, t)$ for $a/L_T =$ %.1f" % tprim if tprim is not None else "")
 plt.tight_layout()
-plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%i.pdf" % (config.tprim_val))
+plt.savefig(getattr(config, "figname", None) or "fig_contours_phi_zed_tprim_%.1f.pdf" % tprim)
