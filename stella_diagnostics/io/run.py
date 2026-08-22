@@ -16,6 +16,7 @@ import netCDF4 as nc4
 from os.path import exists
 
 import stella_diagnostics.grid as grid
+from stella_diagnostics.io.restart import parse_namelist
 import stella_diagnostics.physics.correlations as physics_correlations
 import stella_diagnostics.physics.energy_transfer as physics_energy_transfer
 import stella_diagnostics.physics.fluxes as physics_fluxes
@@ -31,15 +32,14 @@ import stella_diagnostics.quantities.registry as quantities_registry
 import stella_diagnostics.spectral.omega as spectral_omega
 import stella_diagnostics.spectral.stats as spectral_stats
 
-# Placeholder aspect_ratio used when a run's geometry file exists but is in
-# the Miller-geometry format this parser can't fully read (the real
-# rhoc/dxdXcoord computation below is disabled -- it's never produced a
-# sane value here). NOT computed from the run's own geometry -- an
-# unverified stand-in (roughly CBC-like), used only so downstream tprim
-# scaling theories (scan.spectrum_scan.plot_phi_k_spectrum) have some
-# aspect ratio rather than crashing. If you need a physically correct
-# aspect_ratio for a Miller-geometry run, fix the parsing above instead of
-# trusting this.
+# Last-resort placeholder aspect_ratio, used only when StellaRun.__init__
+# couldn't compute a real one at all -- neither the VMEC .vmec.geo file nor
+# the run's own &millergeo_parameters namelist (rmaj/rhoc) were readable.
+# NOT computed from the run's own geometry -- an unverified stand-in
+# (roughly CBC-like), used only so downstream tprim scaling theories
+# (scan.spectrum_scan.plot_phi_k_spectrum) have some aspect ratio rather
+# than crashing. Ordinary Miller-geometry runs no longer hit this path;
+# see the aspect_ratio computation in __init__ below.
 FALLBACK_ASPECT_RATIO = 2.8
 
 
@@ -69,7 +69,6 @@ class StellaRun:
 
         self.omega_file   = filename_base+".omega"
         if code == "stella":
-            self.geo_file_alt = filename_base+".geometry"
             self.geo_file     = filename_base+".vmec.geo"
         elif code == "GX":
             char_dir = filename_base.rfind("/")
@@ -98,23 +97,18 @@ class StellaRun:
             self.alpha0        = geom_factors[0][0]
         except:
             try:
-                # For Miller
-                inputdata = open(self.geo_file_alt, 'r').read().strip()
-                inputdata1 = inputdata.split("\n")[1][5:].split("   ")
-                self.safety_factor = float(inputdata1[1]) #qinp
-                self.aspect_ratio  = FALLBACK_ASPECT_RATIO #float(inputdata1[0]) / float(inputdata1[6]) # rhoc/dxdXcoord
-                #self.aspect_ratio  = 1/5.55#float(inputdata1[0]) / float(inputdata1[6]) # rhoc/dxdXcoord
-                # print, not warnings.warn: this class turns off UserWarning
-                # (see filterwarnings('ignore', ...) above), which would
-                # otherwise swallow it silently.
-                print(
-                    "%s: using unverified placeholder aspect_ratio=%.3f (Miller geometry file "
-                    "parsing doesn't compute a real value here) -- see io.run.FALLBACK_ASPECT_RATIO."
-                    % (self.filename_base, self.aspect_ratio)
-                )
-
+                # For Miller: read rmaj/rhoc/qinp straight from the run's
+                # own &millergeo_parameters namelist (not the .geometry
+                # output file, which echoes rhoc/qinp but never rmaj).
+                # rmaj = R/a_ref and rhoc = r/a_ref at this flux surface
+                # are both normalized to the same reference length, so
+                # their ratio is the local aspect ratio R/r -- a real,
+                # run-specific value, not a guess.
+                params = parse_namelist(self.input_file)
+                self.safety_factor = params["qinp"]
+                self.aspect_ratio  = params["rmaj"] / params["rhoc"]
             except Exception as e:
-                #print("Warning:", type(e).__name__) 
+                #print("Warning:", type(e).__name__)
                 print("Warning! Geometry file for " + self.filename_base + " do not exist?")
 
     def read_basic_params(self):
