@@ -43,8 +43,10 @@ optionally:
                     window ending at each run's own last time sample)
     kx_min       -- lower kx bound to plot (default 0.0)
     kx_max       -- upper kx bound to plot (default 0.5)
-    x_min        -- lower x/rho_i bound to plot (default None -> autoscale)
-    x_max        -- upper x/rho_i bound to plot (default None -> autoscale)
+    x_min        -- lower x/rho_i bound to plot (default None -> the real-
+                    space x grid's own lower edge, across every run)
+    x_max        -- upper x/rho_i bound to plot (default None -> the real-
+                    space x grid's own upper edge, across every run)
     nx           -- real-space x grid resolution passed to
                     StellaRun.get_quantity_x_y (default None -> package
                     default)
@@ -84,6 +86,8 @@ eps_override = getattr(config, "eps", None)
 
 fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(16, 13), sharex="col")
 (ax_ERH, ax_vE_x), (ax_eps, ax_upar_x), (ax_cos, ax_uparcos_x) = axs
+
+x_grid_min, x_grid_max = None, None
 
 for i, dirname in enumerate(config.dirnames):
     label = labels[i]
@@ -139,6 +143,9 @@ for i, dirname in enumerate(config.dirnames):
     uparcos_of_x = uparcos_x_y[:, 0]
     vE_of_x = -dxphi_x_y[:, 0]
 
+    x_grid_min = x.min() if x_grid_min is None else min(x_grid_min, x.min())
+    x_grid_max = x.max() if x_grid_max is None else max(x_grid_max, x.max())
+
     ax_vE_x.plot(x, vE_of_x, marker=".", label=label, c=color)
     ax_upar_x.plot(x, -2 * eps / q * upar_of_x, marker=".", label=label, c=color)
     ax_uparcos_x.plot(x, -2 / q * uparcos_of_x, marker=".", label=label, c=color)
@@ -181,7 +188,7 @@ ax_uparcos_x.set_ylabel(r"$-\frac{2}{q}\langle u_\parallel\cos\theta\rangle$")
 ax_uparcos_x.set_xlabel(r"$x/\rho_i$")
 ax_uparcos_x.grid(True)
 
-ax_uparcos_x.set_xlim([x_min, x_max])
+ax_uparcos_x.set_xlim([x_min if x_min is not None else x_grid_min, x_max if x_max is not None else x_grid_max])
 
 plt.tight_layout()
 fig.savefig(getattr(config, "figname", None) or "fig_zonal_upar_vE_kx.pdf")
